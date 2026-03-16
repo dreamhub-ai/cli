@@ -9,14 +9,15 @@ from typing import Any
 import httpx
 import typer
 
+from dreamhubcli import __version__
 from dreamhubcli.auth import get_auth_headers
-from dreamhubcli.config import load_config
 from dreamhubcli.output import print_error as _print_error
 from dreamhubcli.output import print_warning as _print_warning
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 30.0
+USER_AGENT = f"dreamhub-cli/{__version__}"
 _MAX_RETRIES = 3
 
 
@@ -24,13 +25,15 @@ class DreamhubClient:
     """Thin wrapper around httpx that injects auth headers and base URL."""
 
     def __init__(self, api_url: str | None = None, timeout: float = DEFAULT_TIMEOUT) -> None:
-        config = load_config()
-        self.base_url = (api_url or config.api_url).rstrip("/")
+        from dreamhubcli.config import DEFAULT_API_URL
+
+        self.base_url = (api_url or DEFAULT_API_URL).rstrip("/")
         self.timeout = timeout
 
     def _build_headers(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
         headers = get_auth_headers()
         headers["Content-Type"] = "application/json"
+        headers["User-Agent"] = USER_AGENT
         if extra_headers:
             headers.update(extra_headers)
         return headers

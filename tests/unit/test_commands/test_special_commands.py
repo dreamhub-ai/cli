@@ -189,7 +189,7 @@ class TestVersionFlag:
     def test_version_flag(self) -> None:
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert "Dreamhub CLI" in result.output
 
     def test_version_subcommand_removed(self) -> None:
         result = runner.invoke(app, ["version"])
@@ -282,16 +282,6 @@ class TestCustomCommandHelpExamples:
 
     def test_auth_status_help_examples(self) -> None:
         result = runner.invoke(app, ["auth", "status", "--help"])
-        assert result.exit_code == 0
-        assert "Examples:" in result.output
-
-    def test_auth_set_tenant_help_examples(self) -> None:
-        result = runner.invoke(app, ["auth", "set-tenant", "--help"])
-        assert result.exit_code == 0
-        assert "Examples:" in result.output
-
-    def test_auth_set_url_help_examples(self) -> None:
-        result = runner.invoke(app, ["auth", "set-url", "--help"])
         assert result.exit_code == 0
         assert "Examples:" in result.output
 

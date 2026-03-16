@@ -63,7 +63,9 @@ class TestAuthStatus:
         )
         result = runner.invoke(app, ["auth", "status"])
         assert result.exit_code == 0
-        assert "Logged in as user@acme.com (Acme)" in result.output
+        assert "user@acme.com" in result.output
+        assert "Acme" in result.output
+        assert "Authenticated" in result.output
 
     @respx.mock
     def test_status_token_expired(self, temp_config_dir: Path) -> None:
@@ -101,23 +103,4 @@ class TestAuthLogout:
         assert config.tenant_id is None
 
 
-class TestAuthSetTenant:
-    def test_set_tenant(self, temp_config_dir: Path) -> None:
-        save_config(DreamhubConfig(token="pat_abc"))
-        result = runner.invoke(app, ["auth", "set-tenant", "new-tenant"])
-        assert result.exit_code == 0
-        config = load_config()
-        assert config.tenant_id == "new-tenant"
 
-    def test_set_tenant_requires_auth(self, temp_config_dir: Path) -> None:
-        result = runner.invoke(app, ["auth", "set-tenant", "new-tenant"])
-        assert result.exit_code == 1
-        assert "Not logged in" in result.output
-
-
-class TestAuthSetUrl:
-    def test_set_url(self, temp_config_dir: Path) -> None:
-        result = runner.invoke(app, ["auth", "set-url", "https://custom.api/v1"])
-        assert result.exit_code == 0
-        config = load_config()
-        assert config.api_url == "https://custom.api/v1"

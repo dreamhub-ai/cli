@@ -15,10 +15,9 @@ from dreamhubcli.config import DreamhubConfig, save_config
 
 
 class TestDreamhubClient:
-    def test_uses_config_base_url(self, temp_config_dir: Path) -> None:
-        save_config(DreamhubConfig(api_url="https://custom.api/v1"))
+    def test_uses_default_base_url(self, temp_config_dir: Path) -> None:
         client = DreamhubClient()
-        assert client.base_url == "https://custom.api/v1"
+        assert client.base_url == "https://crm.dreamhub.ai/api/v1"
 
     def test_override_base_url(self, temp_config_dir: Path) -> None:
         client = DreamhubClient(api_url="https://override.api/v2")

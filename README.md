@@ -36,12 +36,12 @@ dh companies filter name contains_nocase Acme
 dh deals filter status eq 1 and name contains Dreamhub
 
 # Get a single record
-dh deals get D-AB-1234
-dh companies get CO-AB-5678 --json
+dh deals get d-acm-1a2b3c4d
+dh companies get c-acm-5e6f7a8b --json
 
 # Create and update
 dh leads create '{"firstName": "Jane", "lastName": "Doe"}'
-dh companies update CO-AB-1 '{"industry": "SaaS"}'
+dh companies update c-acm-5e6f7a8b '{"industry": "SaaS"}'
 
 # Search across all entities
 dh search "Acme Corp"
@@ -76,9 +76,6 @@ Credentials and settings are stored locally at `~/.dreamhub/config.toml`.
 ```shell
 # Check current auth status
 dh auth status
-
-# Switch tenant
-dh auth set-tenant other-tenant-id
 
 # Log out (clears stored credentials)
 dh auth logout
