@@ -78,7 +78,9 @@ def list_activities(
     ctx: typer.Context,
     entity_type: str = typer.Argument(help="Entity type (companies, deals, leads, people, tasks)."),
     entity_id: str = typer.Argument(help="Entity ID."),
-    activity_type: list[str] = typer.Option([], "--type", "-t", help="Filter by activity type (name or ID). Repeatable."),
+    activity_type: list[str] = typer.Option(
+        [], "--type", "-t", help="Filter by activity type (name or ID). Repeatable."
+    ),
     from_date: str | None = typer.Option(None, "--from", help="Start date (ISO 8601)."),
     to_date: str | None = typer.Option(None, "--to", help="End date (ISO 8601)."),
     size: int = typer.Option(20, "--size", "-s", help="Max results."),

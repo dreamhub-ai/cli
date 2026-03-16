@@ -89,9 +89,7 @@ class TestListActivities:
         route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
             return_value=httpx.Response(200, json={"activities": [], "total": 0})
         )
-        result = runner.invoke(
-            app, ["activities", "list", "deals", "D-AB-1", "--type", "call", "--type", "email"]
-        )
+        result = runner.invoke(app, ["activities", "list", "deals", "D-AB-1", "--type", "call", "--type", "email"])
         assert result.exit_code == 0
         payload = json.loads(route.calls[0].request.content)
         assert payload["activityTypes"] == [1, 2]
@@ -118,9 +116,16 @@ class TestListActivities:
         result = runner.invoke(
             app,
             [
-                "activities", "list", "deals", "D-AB-1",
-                "--people", "P-AB-1", "--people", "P-AB-2",
-                "--tag", "ato-4e5a1118",
+                "activities",
+                "list",
+                "deals",
+                "D-AB-1",
+                "--people",
+                "P-AB-1",
+                "--people",
+                "P-AB-2",
+                "--tag",
+                "ato-4e5a1118",
             ],
         )
         assert result.exit_code == 0
