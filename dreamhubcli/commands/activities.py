@@ -156,6 +156,7 @@ def get_activity(
     entity_type: str = typer.Argument(help="Entity type (companies, deals, leads, people, tasks)."),
     entity_id: str = typer.Argument(help="Entity ID."),
     activity_id: str = typer.Argument(help="Activity ID."),
+    size: int = typer.Option(500, "--size", "-s", help="Max activities to search."),
     use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
     api_url: str | None = typer.Option(None, "--api-url", help="Override API base URL."),
 ) -> None:
@@ -165,7 +166,7 @@ def get_activity(
     client = DreamhubClient(api_url=api_url)
     try:
         with console.status("Fetching activity...", spinner="dots"):
-            response = client.post(f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": 100})
+            response = client.post(f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": size})
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
     handle_response(response, verbose=ctx.obj.get("verbose", False))
@@ -173,7 +174,14 @@ def get_activity(
     activities = data.get("activities", [])
     match = next((a for a in activities if a.get("id") == activity_id), None)
     if match is None:
-        print_error(f"Activity '{activity_id}' not found on {entity_id}.")
+        total = data.get("total", len(activities))
+        if isinstance(total, int) and total > len(activities):
+            print_error(
+                f"Activity '{activity_id}' not found in first {len(activities)} of {total} "
+                f"activities on {entity_id}. Retry with a larger --size."
+            )
+        else:
+            print_error(f"Activity '{activity_id}' not found on {entity_id}.")
         raise typer.Exit(code=1)
     if use_json:
         print_json(match)

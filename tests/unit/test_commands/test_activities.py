@@ -214,6 +214,23 @@ class TestGetActivity:
         assert result.exit_code == 1
         assert "not found" in result.output
 
+    @respx.mock
+    def test_get_activity_not_found_truncated(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "activities": [{"id": "ACT-1", "type": 9, "notes": {}, "createdAt": "2026-03-16T10:00:00Z"}],
+                    "total": 250,
+                },
+            )
+        )
+        result = runner.invoke(app, ["activities", "get", "deals", "D-AB-1", "ACT-MISSING", "--size", "1"])
+        assert result.exit_code == 1
+        assert "1 of 250" in result.output
+        assert "--size" in result.output
+
     def test_get_invalid_entity_type(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
         result = runner.invoke(app, ["activities", "get", "widgets", "W-1", "ACT-1"])
