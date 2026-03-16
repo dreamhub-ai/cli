@@ -70,16 +70,22 @@ def _resolve_activity_type(value: str) -> int:
     name="list",
     epilog="\b\nExamples:\n  dh activities list deals d-acm-1a2b3c4d\n"
     "  dh activities list companies c-acm-1a2b3c4d --type email\n"
-    "  dh activities list people p-johd-1a2b3c4d --from 2026-01-01 --to 2026-03-01 --json",
+    "  dh activities list people p-johd-1a2b3c4d --from 2026-01-01 --to 2026-03-01 --json\n"
+    "  dh activities list deals d-acm-1a2b3c4d --type call --type email --direction inbound\n"
+    "  dh activities list deals d-acm-1a2b3c4d --people p-johd-5e6f7a8b --tag ato-4e5a1118",
 )
 def list_activities(
     ctx: typer.Context,
     entity_type: str = typer.Argument(help="Entity type (companies, deals, leads, people, tasks)."),
     entity_id: str = typer.Argument(help="Entity ID."),
-    activity_type: str | None = typer.Option(None, "--type", "-t", help="Filter by activity type (name or ID)."),
+    activity_type: list[str] = typer.Option([], "--type", "-t", help="Filter by activity type (name or ID). Repeatable."),
     from_date: str | None = typer.Option(None, "--from", help="Start date (ISO 8601)."),
     to_date: str | None = typer.Option(None, "--to", help="End date (ISO 8601)."),
     size: int = typer.Option(20, "--size", "-s", help="Max results."),
+    direction: str | None = typer.Option(None, "--direction", "-d", help="Email direction (inbound/outbound)."),
+    people: list[str] = typer.Option([], "--people", "-p", help="Filter by person ID(s). Repeatable."),
+    tags: list[str] = typer.Option([], "--tag", help="Filter by activity tag ID(s). Repeatable."),
+    include_raw: bool = typer.Option(False, "--include-raw", help="Include raw activity payloads."),
     use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
     api_url: str | None = typer.Option(None, "--api-url", help="Override API base URL."),
 ) -> None:
@@ -89,11 +95,19 @@ def list_activities(
     client = DreamhubClient(api_url=api_url)
     payload: dict[str, Any] = {"size": size}
     if activity_type:
-        payload["activityTypes"] = [_resolve_activity_type(activity_type)]
+        payload["activityTypes"] = [_resolve_activity_type(t) for t in activity_type]
     if from_date:
         payload["fromDatetime"] = from_date
     if to_date:
         payload["toDatetime"] = to_date
+    if direction:
+        payload["direction"] = direction
+    if people:
+        payload["peopleIds"] = people
+    if tags:
+        payload["activitiesTags"] = tags
+    if include_raw:
+        payload["includeRaw"] = True
     try:
         with console.status("Fetching activities...", spinner="dots"):
             response = client.post(f"{resource_path}/{entity_id}/activities/fetch", json_payload=payload)

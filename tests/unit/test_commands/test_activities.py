@@ -83,6 +83,62 @@ class TestListActivities:
         assert payload["fromDatetime"] == "2026-01-01"
         assert payload["toDatetime"] == "2026-03-01"
 
+    @respx.mock
+    def test_list_multiple_types(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(
+            app, ["activities", "list", "deals", "D-AB-1", "--type", "call", "--type", "email"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["activityTypes"] == [1, 2]
+
+    @respx.mock
+    def test_list_with_direction(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(
+            app, ["activities", "list", "deals", "D-AB-1", "--type", "email", "--direction", "inbound"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["direction"] == "inbound"
+
+    @respx.mock
+    def test_list_with_people_and_tags(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(
+            app,
+            [
+                "activities", "list", "deals", "D-AB-1",
+                "--people", "P-AB-1", "--people", "P-AB-2",
+                "--tag", "ato-4e5a1118",
+            ],
+        )
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["peopleIds"] == ["P-AB-1", "P-AB-2"]
+        assert payload["activitiesTags"] == ["ato-4e5a1118"]
+
+    @respx.mock
+    def test_list_with_include_raw(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(app, ["activities", "list", "deals", "D-AB-1", "--include-raw"])
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["includeRaw"] is True
+
     def test_list_invalid_entity_type(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
         result = runner.invoke(app, ["activities", "list", "widgets", "W-1"])
