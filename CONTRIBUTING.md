@@ -1,6 +1,6 @@
 # Contributing to dreamhubcli
 
-Thanks for your interest in contributing to the DreamHub CLI! This tool is built by [DreamHub](https://dreamhub.ai) and we welcome community contributions.
+Thanks for your interest in contributing to the Dreamhub CLI! This tool is built by [Dreamhub](https://dreamhub.ai) and we welcome community contributions.
 
 ## Before You Start
 
