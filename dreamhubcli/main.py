@@ -50,7 +50,7 @@ def _version_callback(value: bool) -> None:
         from dreamhubcli.output import console
 
         console.print(f"[bold]Dreamhub CLI[/bold] v{__version__}")
-        console.print(f"[dim]https://github.com/dreamhub-ai/cli[/dim]")
+        console.print("[dim]https://github.com/dreamhub-ai/cli[/dim]")
         raise typer.Exit()
 
 

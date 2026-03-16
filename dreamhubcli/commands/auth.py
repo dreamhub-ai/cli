@@ -43,7 +43,7 @@ def _print_status_panel(*, email: str | None = None, tenant: str | None = None) 
         lines.append(f"  [bold]Tenant:[/bold]  {tenant}")
     lines.append(f"  [bold]API:[/bold]     {DEFAULT_API_URL}")
     lines.append(f"  [bold]Version:[/bold] {__version__}")
-    lines.append(f"  [bold]Status:[/bold]  [green]Authenticated[/green]")
+    lines.append("  [bold]Status:[/bold]  [green]Authenticated[/green]")
 
     panel = Panel("\n".join(lines), border_style="dim", padding=(0, 1))
     console.print(panel)
