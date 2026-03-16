@@ -10,6 +10,7 @@ import httpx
 import respx
 from typer.testing import CliRunner
 
+from dreamhubcli import __version__
 from dreamhubcli.config import DreamhubConfig, save_config
 from dreamhubcli.main import app
 
@@ -187,8 +188,6 @@ class TestSettingsCommands:
 
 class TestVersionFlag:
     def test_version_flag(self) -> None:
-        from dreamhubcli import __version__
-
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         assert "Dreamhub CLI" in result.output
