@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in the DreamHub CLI
+description: Report a bug in the Dreamhub CLI
 labels: ["bug"]
 body:
   - type: markdown

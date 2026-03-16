@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature or enhancement for the DreamHub CLI
+description: Suggest a new feature or enhancement for the Dreamhub CLI
 labels: ["enhancement"]
 body:
   - type: markdown
