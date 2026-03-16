@@ -11,13 +11,13 @@ import respx
 import typer
 
 from dreamhubcli.client import DreamhubClient
-from dreamhubcli.config import DreamhubConfig, save_config
+from dreamhubcli.config import DEFAULT_API_URL, DreamhubConfig, save_config
 
 
 class TestDreamhubClient:
     def test_uses_default_base_url(self, temp_config_dir: Path) -> None:
         client = DreamhubClient()
-        assert client.base_url == "https://crm.dreamhub.ai/api/v1"
+        assert client.base_url == DEFAULT_API_URL
 
     def test_override_base_url(self, temp_config_dir: Path) -> None:
         client = DreamhubClient(api_url="https://override.api/v2")

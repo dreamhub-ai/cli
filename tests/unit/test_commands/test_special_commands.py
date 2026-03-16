@@ -187,9 +187,12 @@ class TestSettingsCommands:
 
 class TestVersionFlag:
     def test_version_flag(self) -> None:
+        from dreamhubcli import __version__
+
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         assert "Dreamhub CLI" in result.output
+        assert __version__ in result.output
 
     def test_version_subcommand_removed(self) -> None:
         result = runner.invoke(app, ["version"])

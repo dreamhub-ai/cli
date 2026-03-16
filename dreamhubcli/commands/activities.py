@@ -118,8 +118,12 @@ def list_activities(
             title=f"Activities for {entity_id}",
         )
         count_per_type = data.get("countPerType", {})
-        if count_per_type:
-            parts = [f"{ACTIVITY_TYPES.get(int(k), k)}: {v}" for k, v in count_per_type.items() if int(v) > 0]
+        if isinstance(count_per_type, dict) and count_per_type:
+            parts = [
+                f"{ACTIVITY_TYPES.get(int(k), k)}: {v}"
+                for k, v in count_per_type.items()
+                if str(v).isdigit() and int(v) > 0
+            ]
             if parts:
                 console.print(f"[dim]{' | '.join(parts)} | Total: {total}[/dim]")
         else:
@@ -257,9 +261,14 @@ def delete_activity(
 
 @app.command(
     name="types",
-    epilog="\b\nExamples:\n  dh activities types",
+    epilog="\b\nExamples:\n  dh activities types\n  dh activities types --json",
 )
-def list_types() -> None:
+def list_types(
+    use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
+) -> None:
     """List available activity types."""
     rows = [{"id": k, "name": v} for k, v in ACTIVITY_TYPES.items()]
-    print_table(rows, columns=["id", "name"], title="Activity Types")
+    if use_json:
+        print_json(rows)
+    else:
+        print_table(rows, columns=["id", "name"], title="Activity Types")
