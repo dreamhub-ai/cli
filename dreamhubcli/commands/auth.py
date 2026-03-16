@@ -3,10 +3,11 @@
 from typing import Optional
 
 import typer
+from rich.panel import Panel
 
+from dreamhubcli import __version__
 from dreamhubcli.auth import is_authenticated, login_with_browser, login_with_token, logout
 from dreamhubcli.client import DreamhubClient
-from dreamhubcli.config import load_config
 from dreamhubcli.errors import handle_response
 from dreamhubcli.output import console, print_error, print_success
 
@@ -31,6 +32,23 @@ def login(
         console.print("[dim]Tip: Run 'dh --install-completion' to enable tab completion in your shell.[/dim]")
 
 
+def _print_status_panel(*, email: str | None = None, tenant: str | None = None) -> None:
+    """Render the branded status panel."""
+    from dreamhubcli.config import DEFAULT_API_URL
+
+    lines: list[str] = []
+    if email:
+        lines.append(f"  [bold]User:[/bold]    {email}")
+    if tenant:
+        lines.append(f"  [bold]Tenant:[/bold]  {tenant}")
+    lines.append(f"  [bold]API:[/bold]     {DEFAULT_API_URL}")
+    lines.append(f"  [bold]Version:[/bold] {__version__}")
+    lines.append("  [bold]Status:[/bold]  [green]Authenticated[/green]")
+
+    panel = Panel("\n".join(lines), border_style="dim", padding=(0, 1))
+    console.print(panel)
+
+
 @app.command(
     epilog="\b\nExamples:\n  dh auth status",
 )
@@ -46,13 +64,12 @@ def status() -> None:
     if response.status_code == 200:
         content_type = response.headers.get("content-type", "")
         if "application/json" not in content_type:
-            # /me resolved to frontend HTML, not an API endpoint
-            console.print("Logged in (token set)")
+            _print_status_panel()
             return
         data = response.json()
-        email = data.get("email", "unknown")
-        tenant = data.get("tenantName", data.get("tenant_name", "unknown"))
-        console.print(f"Logged in as {email} ({tenant})")
+        email = data.get("email")
+        tenant = data.get("tenantName", data.get("tenant_name"))
+        _print_status_panel(email=email, tenant=tenant)
         return
 
     if response.status_code == 401:
@@ -62,71 +79,10 @@ def status() -> None:
 
     if response.status_code == 404:
         # /users/me may not exist for PAT-based auth; token is still valid
-        console.print("Logged in (token set)")
+        _print_status_panel()
         return
 
     handle_response(response)
-
-
-@app.command(
-    epilog="\b\nExamples:\n  dh auth set-tenant my-tenant-id",
-)
-def set_tenant(
-    tenant_id: str = typer.Argument(help="The tenant ID to set."),
-) -> None:
-    """Set or update the tenant ID without changing the token."""
-    config = load_config()
-    if not config.token:
-        print_error("Not logged in. Run: dh auth login")
-        raise typer.Exit(code=1)
-    login_with_token(config.token, tenant_id=tenant_id)
-    print_success(f"Tenant ID set to: {tenant_id}")
-
-
-@app.command(
-    epilog="\b\nExamples:\n  dh auth set-url https://crm.dreamhub.ai/api/v1",
-)
-def set_url(
-    api_url: str = typer.Argument(help="The API base URL."),
-) -> None:
-    """Override the API base URL."""
-    from dreamhubcli.config import save_config
-
-    config = load_config()
-    config.api_url = api_url
-    save_config(config)
-    print_success(f"API URL set to: {api_url}")
-
-
-ENVIRONMENTS = {
-    "prod": {
-        "api_url": "https://crm.dreamhub.ai/api/v1",
-        "auth_url": "https://crm-auth.dreamhub.ai",
-        "client_id": "bc32f08d-8c43-4360-bd68-fa1f320c0560",
-    },
-}
-
-
-@app.command(
-    epilog="\b\nExamples:\n  dh auth set-env prod",
-)
-def set_env(
-    env: str = typer.Argument(help="Environment name (e.g. prod)."),
-) -> None:
-    """Switch API and auth URLs to a named environment."""
-    from dreamhubcli.config import save_config
-
-    if env not in ENVIRONMENTS:
-        print_error(f"Unknown environment '{env}'. Choose from: {', '.join(ENVIRONMENTS)}")
-        raise typer.Exit(code=1)
-
-    env_config = ENVIRONMENTS[env]
-    config = load_config()
-    config.api_url = env_config["api_url"]
-    config.auth_url = env_config["auth_url"]
-    config.client_id = env_config["client_id"]
-    save_config(config)
-    print_success(f"Switched to {env}: {env_config['api_url']}")
 
 
 @app.command(

@@ -20,8 +20,8 @@ poetry run dh --help         # verify CLI works
 - **`dreamhubcli/main.py`** — Typer app, registers all command groups
 - **`dreamhubcli/commands/_crud.py`** — Factory that generates list/get/create/update/delete/filter for entity command groups
 - **`dreamhubcli/commands/`** — One module per command group (auth, search, reporting, etc.)
-- **`dreamhubcli/client.py`** — httpx-based API client with auth header injection
-- **`dreamhubcli/config.py`** — TOML config loader/saver (Pydantic model)
+- **`dreamhubcli/client.py`** — httpx-based API client with auth header injection and User-Agent
+- **`dreamhubcli/config.py`** — TOML config loader/saver (Pydantic model); auth_url and client_id always from compiled defaults
 - **`dreamhubcli/auth.py`** — Login/logout helpers
 - **`dreamhubcli/auth_callback.py`** — OAuth2 PKCE flow with localhost callback server
 - **`dreamhubcli/output.py`** — Rich console formatting, `print_error` writes to stderr
@@ -29,7 +29,7 @@ poetry run dh --help         # verify CLI works
 
 ## Command Groups
 
-13 groups: auth, companies, deals, leads, people, users, settings, history, tasks, search, reporting, enrichment (dev), access (dev)
+14 groups: auth, activities, companies, deals, leads, people, users, settings, history, tasks, search, reporting, enrichment (dev), access (dev)
 
 CRUD entities use the shared factory — add new ones by calling `build_crud_app()` in a new module.
 

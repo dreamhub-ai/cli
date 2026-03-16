@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dreamhubcli"
-version = "0.1.0"
+version = "1.2.0"
 description = "Dreamhub CLI — unified command-line interface for all Dreamhub APIs"
 authors = ["Rafi <rafi@dreamhub.ai>"]
 readme = "README.md"

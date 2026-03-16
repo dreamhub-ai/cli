@@ -28,7 +28,6 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import httpx
 import typer
 
-from dreamhubcli.config import load_config
 from dreamhubcli.output import console, print_error
 
 logger = logging.getLogger(__name__)
@@ -82,11 +81,12 @@ def _generate_pkce() -> tuple[str, str]:
 
 def _build_auth_url(challenge: str, state: str) -> str:
     """Build the full authorize URL with PKCE and state parameters."""
-    config = load_config()
-    base = config.auth_url.rstrip("/")
+    from dreamhubcli.config import DEFAULT_AUTH_URL, DEFAULT_CLIENT_ID
+
+    base = DEFAULT_AUTH_URL.rstrip("/")
     params = {
         "response_type": "code",
-        "client_id": config.client_id,
+        "client_id": DEFAULT_CLIENT_ID,
         "redirect_uri": REDIRECT_URI,
         "scope": "openid profile email",
         "state": state,
@@ -167,8 +167,9 @@ def _run_callback_server(received: threading.Event) -> tuple[str | None, str | N
 
 def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None]:
     """Exchange authorization code + PKCE verifier for access token."""
-    config = load_config()
-    base = config.auth_url.rstrip("/")
+    from dreamhubcli.config import DEFAULT_AUTH_URL, DEFAULT_CLIENT_ID
+
+    base = DEFAULT_AUTH_URL.rstrip("/")
     token_endpoint = f"{base}{_TOKEN_PATH}"
 
     response = httpx.post(
@@ -178,7 +179,7 @@ def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None]
             "code": auth_code,
             "redirect_uri": REDIRECT_URI,
             "code_verifier": code_verifier,
-            "client_id": config.client_id,
+            "client_id": DEFAULT_CLIENT_ID,
         },
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=30.0,

@@ -19,6 +19,7 @@ import typer
 from dreamhubcli import __version__
 from dreamhubcli.commands import (
     access,
+    activities,
     auth,
     companies,
     deals,
@@ -46,7 +47,10 @@ app = typer.Typer(
 
 def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(f"dh {__version__}")
+        from dreamhubcli.output import console
+
+        console.print(f"[bold]Dreamhub CLI[/bold] v{__version__}")
+        console.print("[dim]https://github.com/dreamhub-ai/cli[/dim]")
         raise typer.Exit()
 
 
@@ -69,6 +73,7 @@ def main_callback(
         pass
 
 
+app.add_typer(activities.app)
 app.add_typer(auth.app)
 app.add_typer(companies.app)
 app.add_typer(deals.app)
