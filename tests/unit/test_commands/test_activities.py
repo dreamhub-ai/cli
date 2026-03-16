@@ -83,9 +83,157 @@ class TestListActivities:
         assert payload["fromDatetime"] == "2026-01-01"
         assert payload["toDatetime"] == "2026-03-01"
 
+    @respx.mock
+    def test_list_multiple_types(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(app, ["activities", "list", "deals", "D-AB-1", "--type", "call", "--type", "email"])
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["activityTypes"] == [1, 2]
+
+    @respx.mock
+    def test_list_with_direction(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(
+            app, ["activities", "list", "deals", "D-AB-1", "--type", "email", "--direction", "inbound"]
+        )
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["direction"] == "inbound"
+
+    @respx.mock
+    def test_list_with_people_and_tags(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(
+            app,
+            [
+                "activities",
+                "list",
+                "deals",
+                "D-AB-1",
+                "--people",
+                "P-AB-1",
+                "--people",
+                "P-AB-2",
+                "--tag",
+                "ato-4e5a1118",
+            ],
+        )
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["peopleIds"] == ["P-AB-1", "P-AB-2"]
+        assert payload["activitiesTags"] == ["ato-4e5a1118"]
+
+    @respx.mock
+    def test_list_with_include_raw(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(app, ["activities", "list", "deals", "D-AB-1", "--include-raw"])
+        assert result.exit_code == 0
+        payload = json.loads(route.calls[0].request.content)
+        assert payload["includeRaw"] is True
+
     def test_list_invalid_entity_type(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
         result = runner.invoke(app, ["activities", "list", "widgets", "W-1"])
+        assert result.exit_code == 1
+        assert "Unknown entity type" in result.output
+
+
+class TestGetActivity:
+    @respx.mock
+    def test_get_activity_detail(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "activities": [
+                        {
+                            "id": "ACT-1",
+                            "type": 9,
+                            "notes": {"date": "2026-03-16", "summary": "Follow-up call"},
+                            "peopleIds": ["P-AB-1"],
+                            "companyId": "CO-AB-1",
+                            "createdAt": "2026-03-16T10:00:00Z",
+                        },
+                        {"id": "ACT-OTHER", "type": 1, "notes": {}, "createdAt": "2026-03-15T10:00:00Z"},
+                    ],
+                    "total": 2,
+                },
+            )
+        )
+        result = runner.invoke(app, ["activities", "get", "deals", "D-AB-1", "ACT-1"])
+        assert result.exit_code == 0
+        assert "ACT-1" in result.output
+        assert "Note" in result.output
+
+    @respx.mock
+    def test_get_activity_json(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        respx.post(f"{API_URL}/people/P-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "activities": [
+                        {
+                            "id": "ACT-2",
+                            "type": 1,
+                            "notes": {"subject": "Discovery call", "date": "2026-03-16"},
+                            "createdAt": "2026-03-16T10:00:00Z",
+                        }
+                    ],
+                    "total": 1,
+                },
+            )
+        )
+        result = runner.invoke(app, ["activities", "get", "people", "P-AB-1", "ACT-2", "--json"])
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["id"] == "ACT-2"
+        assert data["notes"]["subject"] == "Discovery call"
+
+    @respx.mock
+    def test_get_activity_not_found(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(app, ["activities", "get", "deals", "D-AB-1", "ACT-MISSING"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    @respx.mock
+    def test_get_activity_not_found_truncated(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "activities": [{"id": "ACT-1", "type": 9, "notes": {}, "createdAt": "2026-03-16T10:00:00Z"}],
+                    "total": 250,
+                },
+            )
+        )
+        result = runner.invoke(app, ["activities", "get", "deals", "D-AB-1", "ACT-MISSING", "--size", "1"])
+        assert result.exit_code == 1
+        assert "1 of 250" in result.output
+        assert "--size" in result.output
+
+    def test_get_invalid_entity_type(self, temp_config_dir: Path) -> None:
+        _auth(temp_config_dir)
+        result = runner.invoke(app, ["activities", "get", "widgets", "W-1", "ACT-1"])
         assert result.exit_code == 1
         assert "Unknown entity type" in result.output
 
