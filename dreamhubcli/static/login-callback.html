@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dreamhub CLI — Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Figtree', sans-serif;
+            background-color: #1C2432;
+            color: white;
+            min-height: 100vh;
+        }
+
+        .content-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+            min-height: calc(100vh - 40px);
+        }
+
+        .background-gradient {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: -1;
+        }
+
+        .icons-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .icon-circle {
+            position: relative;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 5px;
+        }
+
+        .logo-icon-container {
+            background-color: #2B374A;
+            border: 0.5px solid #667085;
+        }
+
+        .status-icon-container {
+            width: 36px;
+            height: 36px;
+            background-color: #222A38;
+            border: 0.5px solid #475467;
+            z-index: 5;
+            margin: 0 -15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-icon-container svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        h1 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            line-height: 135%;
+            color: #F2F4F7;
+        }
+
+        p {
+            font-size: 14px;
+            font-weight: 400;
+            line-height: 150%;
+            color: #98A2B3;
+            max-width: 420px;
+        }
+
+        .mono {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            background: #2B374A;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #D0D5DD;
+        }
+
+        a {
+            color: #4794FF;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .status-section {
+            display: none;
+        }
+
+        .status-section.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<div class="content-container">
+    <div class="background-gradient">
+        <svg width="100%" height="100%" viewBox="0 0 521 746" preserveAspectRatio="xMidYMid slice" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+            <g filter="url(#filter0_f)">
+                <ellipse cx="261" cy="372" rx="99" ry="102.5" fill="url(#paint0_radial)" fill-opacity="0.5"/>
+            </g>
+            <defs>
+                <filter id="filter0_f" x="22" y="129.5" width="478" height="485" filterUnits="userSpaceOnUse"
+                        color-interpolation-filters="sRGB">
+                    <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+                    <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+                    <feGaussianBlur stdDeviation="70" result="effect1_foregroundBlur"/>
+                </filter>
+                <radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+                                gradientTransform="translate(258.463 383.522) rotate(88.8552) scale(127.003 139.195)">
+                    <stop offset="0" stop-color="#103181"/>
+                    <stop offset="1" stop-color="#202C3D"/>
+                </radialGradient>
+            </defs>
+        </svg>
+    </div>
+
+    <div class="icons-container">
+        <!-- Dreamhub logo -->
+        <div class="icon-circle logo-icon-container">
+            <svg width="26" height="29" viewBox="0 0 26 29" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24.499 5.867L14.501 -0.085C13.573 -0.638 12.428 -0.638 11.499 -0.085L1.501 5.867C0.572 6.42 0 7.442 0 8.548V20.452C0 21.558 0.572 22.58 1.501 23.133L11.499 29.085C12.428 29.638 13.573 29.638 14.501 29.085L24.499 23.133C25.428 22.58 26 21.558 26 20.452V8.548C26 7.442 25.428 6.42 24.499 5.867ZM21.478 20.618H21.473C15.875 19.508 10.124 19.508 4.526 20.618H4.522C4.138 20.695 3.737 20.539 3.521 20.204C3.498 20.168 3.477 20.131 3.459 20.093C3.285 19.732 3.355 19.297 3.611 18.992L3.612 18.991C7.344 14.545 10.221 9.408 12.088 3.853C12.223 3.451 12.585 3.163 12.998 3.163C13.02 3.163 13.041 3.163 13.062 3.165C13.451 3.189 13.783 3.47 13.911 3.851L13.912 3.854C15.779 9.407 18.655 14.544 22.385 18.988L22.388 18.992C22.644 19.297 22.714 19.732 22.54 20.093C22.522 20.131 22.501 20.168 22.478 20.204C22.262 20.539 21.861 20.695 21.477 20.618H21.478Z"
+                      fill="white"/>
+            </svg>
+        </div>
+
+        <!-- Status icon -->
+        <div class="icon-circle status-icon-container" id="statusIcon">
+            <svg id="successIcon" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg">
+                <path d="M19 6L9 18L5 13" stroke="#23EAA1" stroke-width="2" stroke-linecap="round"
+                      stroke-linejoin="round"/>
+            </svg>
+            <svg id="failureIcon" width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                <path d="M18 6L6 18" stroke="#FF4D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 6L18 18" stroke="#FF4D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+
+        <!-- Terminal icon -->
+        <div class="icon-circle logo-icon-container">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 15L10 12L7 9" stroke="#98A2B3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13 15H17" stroke="#98A2B3" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+        </div>
+    </div>
+
+    <div id="successContent" class="status-section active">
+        <h1>Logged In to Dreamhub CLI</h1>
+        <p>You can close this window and return to your terminal.<br>This page will close automatically.</p>
+    </div>
+
+    <div id="failureContent" class="status-section">
+        <h1>Login Failed</h1>
+        <p>Something went wrong during authentication.<br>
+        Run <span class="mono">dh auth login</span> to try again.<br>
+        If the issue continues, contact <a href="mailto:support@dreamhub.ai">support@dreamhub.ai</a></p>
+    </div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+
+    if (status === 'success') {
+        setTimeout(() => { window.close(); }, 2500);
+    } else {
+        document.getElementById('successIcon').style.display = 'none';
+        document.getElementById('failureIcon').style.display = 'block';
+        document.getElementById('successContent').classList.remove('active');
+        document.getElementById('failureContent').classList.add('active');
+        document.title = 'Dreamhub CLI — Login Failed';
+    }
+</script>
+</body>
+</html>

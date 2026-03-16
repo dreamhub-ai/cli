@@ -1,0 +1,80 @@
+name: Python Package Pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Ruff check
+        run: poetry run ruff check .
+
+      - name: Ruff format check
+        run: poetry run ruff format --check .
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests with coverage
+        run: poetry run pytest --cov=dreamhubcli --cov-report=xml -v
+
+      - name: Check coverage threshold
+        run: poetry run coverage report --fail-under=80
+
+  e2e:
+    name: E2E Tests (staging)
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run E2E tests
+        env:
+          DH_E2E_TOKEN: ${{ secrets.DH_E2E_TOKEN }}
+          DH_E2E_TENANT_ID: ${{ secrets.DH_E2E_TENANT_ID }}
+          DH_DEV_MODE: "1"
+        run: poetry run pytest -m e2e -v --tb=short

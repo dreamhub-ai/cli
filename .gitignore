@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+*.egg
+.env
+.venv/
+
+# Tool / agent state (never commit)
+.claude/
+.planning/
+.a5c
