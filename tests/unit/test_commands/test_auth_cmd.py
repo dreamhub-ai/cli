@@ -101,6 +101,3 @@ class TestAuthLogout:
         config = load_config()
         assert config.token is None
         assert config.tenant_id is None
-
-
-

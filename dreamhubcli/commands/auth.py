@@ -85,7 +85,6 @@ def status() -> None:
     handle_response(response)
 
 
-
 @app.command(
     name="logout",
     epilog="\b\nExamples:\n  dh auth logout",

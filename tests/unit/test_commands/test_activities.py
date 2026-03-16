@@ -94,15 +94,18 @@ class TestCreateActivity:
     @respx.mock
     def test_create_note(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
-        respx.post(f"{API_URL}/deals/D-AB-1/activities").mock(
-            return_value=httpx.Response(201, json={"id": "ACT-NEW"})
-        )
+        respx.post(f"{API_URL}/deals/D-AB-1/activities").mock(return_value=httpx.Response(201, json={"id": "ACT-NEW"}))
         result = runner.invoke(
             app,
             [
-                "activities", "create", "deals", "D-AB-1", "note",
+                "activities",
+                "create",
+                "deals",
+                "D-AB-1",
+                "note",
                 '{"date": "2026-03-16", "summary": "Test"}',
-                "--company", "CO-AB-1",
+                "--company",
+                "CO-AB-1",
             ],
         )
         assert result.exit_code == 0
@@ -117,10 +120,20 @@ class TestCreateActivity:
         result = runner.invoke(
             app,
             [
-                "activities", "create", "leads", "L-AB-1", "call",
+                "activities",
+                "create",
+                "leads",
+                "L-AB-1",
+                "call",
                 '{"date": "2026-03-16", "subject": "Discovery"}',
-                "--people", "P-AB-1", "--people", "P-AB-2",
-                "--company", "CO-AB-1", "--tag", "ato-4e5a1118",
+                "--people",
+                "P-AB-1",
+                "--people",
+                "P-AB-2",
+                "--company",
+                "CO-AB-1",
+                "--tag",
+                "ato-4e5a1118",
             ],
         )
         assert result.exit_code == 0
@@ -137,9 +150,7 @@ class TestCreateActivity:
 
     def test_create_invalid_activity_type(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
-        result = runner.invoke(
-            app, ["activities", "create", "deals", "D-AB-1", "teleport", '{"date": "2026-03-16"}']
-        )
+        result = runner.invoke(app, ["activities", "create", "deals", "D-AB-1", "teleport", '{"date": "2026-03-16"}'])
         assert result.exit_code == 1
         assert "Unknown activity type" in result.output
 
@@ -167,9 +178,7 @@ class TestDeleteActivity:
     @respx.mock
     def test_delete_activity_with_force(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
-        respx.delete(f"{API_URL}/deals/D-AB-1/activities/ACT-1").mock(
-            return_value=httpx.Response(204)
-        )
+        respx.delete(f"{API_URL}/deals/D-AB-1/activities/ACT-1").mock(return_value=httpx.Response(204))
         result = runner.invoke(app, ["activities", "delete", "deals", "D-AB-1", "ACT-1", "--force"])
         assert result.exit_code == 0
         assert "Deleted" in result.output

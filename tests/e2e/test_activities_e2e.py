@@ -61,9 +61,7 @@ def test_activities_create_and_delete(runner: CliRunner, test_deal: dict) -> Non
     activity_id = activity.get("id")
     assert activity_id, f"No activity ID in response: {activity}"
 
-    delete_result = runner.invoke(
-        app, ["activities", "delete", "deals", test_deal["id"], activity_id, "--force"]
-    )
+    delete_result = runner.invoke(app, ["activities", "delete", "deals", test_deal["id"], activity_id, "--force"])
     assert delete_result.exit_code == 0, f"activities delete failed: {delete_result.output}"
 
 

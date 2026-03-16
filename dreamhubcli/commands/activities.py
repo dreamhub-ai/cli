@@ -210,9 +210,7 @@ def update_activity(
     client = DreamhubClient(api_url=api_url)
     try:
         with console.status("Updating activity...", spinner="dots"):
-            response = client.put(
-                f"{resource_path}/{entity_id}/activities/{activity_id}", json_payload=parsed
-            )
+            response = client.put(f"{resource_path}/{entity_id}/activities/{activity_id}", json_payload=parsed)
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
     handle_response(response, verbose=ctx.obj.get("verbose", False))
