@@ -196,9 +196,9 @@
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
+    const hasCode = urlParams.has('code');
 
-    if (status === 'success') {
+    if (hasCode) {
         setTimeout(() => { window.close(); }, 2500);
     } else {
         document.getElementById('successIcon').style.display = 'none';
