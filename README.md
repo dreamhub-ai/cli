@@ -59,6 +59,25 @@ dh history
 
 Most data commands support `--json` for machine-readable output, and all commands support `--help` for usage examples.
 
+## Claude Desktop Integration
+
+Use Dreamhub as an MCP tool provider in Claude Desktop — lets Claude read and manage your CRM data directly.
+
+```shell
+# Auto-configure Claude Desktop
+dh mcp install
+
+# Preview the config without writing
+dh mcp install --dry-run
+
+# Remove the integration
+dh mcp uninstall
+```
+
+Restart Claude Desktop after install/uninstall to apply changes.
+
+Once connected, Claude can list, search, create, and update companies, deals, leads, people, tasks, activities, and more through natural conversation.
+
 ## Shell Completion
 
 Enable tab completion for your shell:
