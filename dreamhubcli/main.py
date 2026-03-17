@@ -26,6 +26,7 @@ from dreamhubcli.commands import (
     enrichment,
     history,
     leads,
+    mcp,
     people,
     reporting,
     search,
@@ -93,6 +94,7 @@ app.command(
     epilog='\b\nExamples:\n  dh search "Acme Corp"\n  dh search "Acme" --type companies --json',
 )(search.search_command)
 app.add_typer(reporting.app)
+app.add_typer(mcp.app)
 
 # Dev/QA only commands — hidden in production
 if is_dev_environment():
