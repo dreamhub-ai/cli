@@ -165,8 +165,11 @@ def _run_callback_server(received: threading.Event) -> tuple[str | None, str | N
 # ---------------------------------------------------------------------------
 
 
-def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None]:
-    """Exchange authorization code + PKCE verifier for access token."""
+def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None, str | None]:
+    """Exchange authorization code + PKCE verifier for access token.
+
+    Returns (access_token, refresh_token, tenant_id).
+    """
     from dreamhubcli.config import DEFAULT_AUTH_URL, DEFAULT_CLIENT_ID
 
     base = DEFAULT_AUTH_URL.rstrip("/")
@@ -191,6 +194,7 @@ def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None]
 
     body = response.json()
     access_token = body["access_token"]
+    refresh_token = body.get("refresh_token")
 
     # Extract tenantId from the JWT payload — the token response body
     # may return a different (wrong) tenant_id field.
@@ -198,7 +202,7 @@ def _exchange_code(auth_code: str, code_verifier: str) -> tuple[str, str | None]
     if not tenant_id:
         tenant_id = body.get("tenant_id") or body.get("tenantId")
 
-    return access_token, tenant_id
+    return access_token, refresh_token, tenant_id
 
 
 def _extract_tenant_from_jwt(token: str) -> str | None:
@@ -220,10 +224,10 @@ def _extract_tenant_from_jwt(token: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def run_browser_flow() -> tuple[str, str | None]:
+def run_browser_flow() -> tuple[str, str | None, str | None]:
     """Open browser for Frontegg OAuth login, wait for callback, return tokens.
 
-    Returns (access_token, tenant_id_or_none) on success.
+    Returns (access_token, refresh_token, tenant_id) on success.
     Raises typer.Exit(code=1) with a printed error on failure.
     """
     if not _port_is_free(CALLBACK_PORT):

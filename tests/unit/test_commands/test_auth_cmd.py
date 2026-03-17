@@ -36,7 +36,7 @@ class TestAuthLogin:
     def test_login_browser_flow_success(self, temp_config_dir: Path) -> None:
         with patch(
             "dreamhubcli.auth_callback.run_browser_flow",
-            return_value=("fake_access_token", "fake_tenant"),
+            return_value=("fake_access_token", None, "fake_tenant"),
         ):
             result = runner.invoke(app, ["auth", "login"])
         assert result.exit_code == 0

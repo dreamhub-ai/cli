@@ -30,6 +30,7 @@ class DreamhubConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     token: str | None = Field(default=None)
+    refresh_token: str | None = Field(default=None)
     tenant_id: str | None = Field(default=None)
 
 
