@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
 import respx
 
 from dreamhubcli.config import DreamhubConfig, save_config
@@ -114,6 +115,29 @@ class TestHelpers:
         activity = {"id": "ACT-1", "type": 99}
         result = _enrich_activity(activity)
         assert "typeName" not in result
+
+
+class TestEntityTypeValidation:
+    def test_resolve_valid_entity_type(self) -> None:
+        from dreamhubcli.mcp_server import _resolve_entity_resource
+
+        assert _resolve_entity_resource("deals") == "deals"
+        assert _resolve_entity_resource("person") == "people"
+        assert _resolve_entity_resource("COMPANIES") == "companies"
+
+    def test_resolve_invalid_entity_type(self) -> None:
+        from dreamhubcli.mcp_server import _resolve_entity_resource
+
+        with pytest.raises(ValueError, match="Unknown entity type"):
+            _resolve_entity_resource("invalid")
+
+
+class TestAuthError:
+    def test_client_raises_when_not_authenticated(self, temp_config_dir: Path) -> None:
+        from dreamhubcli.mcp_server import _client
+
+        with pytest.raises(RuntimeError, match="Not logged in"):
+            _client()
 
 
 class TestDynamicStages:
@@ -509,11 +533,10 @@ class TestDealStagesTool:
 
 class TestToolRegistration:
     def test_crud_tools_registered(self) -> None:
-        from dreamhubcli.mcp_server import mcp
+        from dreamhubcli.mcp_server import SINGULAR_NAMES, mcp
 
         components = mcp._local_provider._components
-        for entity in ["companies", "deals", "leads", "people", "users", "tasks"]:
-            singular = entity.rstrip("s") if not entity.endswith("ies") else entity[:-3] + "y"
+        for entity, singular in SINGULAR_NAMES.items():
             assert f"tool:list_{entity}@" in components, f"list_{entity} not registered"
             assert f"tool:get_{singular}@" in components, f"get_{singular} not registered"
             assert f"tool:create_{singular}@" in components, f"create_{singular} not registered"

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from fastmcp import FastMCP
 
+from dreamhubcli.auth import is_authenticated
 from dreamhubcli.client import DreamhubClient
-from dreamhubcli.errors import require_auth
 
 mcp = FastMCP("dreamhub", instructions="Dreamhub CRM tools. Requires `dh auth login` first.")
 
@@ -68,11 +69,12 @@ CRUD_ENTITIES = {
 
 
 def _client() -> DreamhubClient:
-    require_auth()
+    if not is_authenticated():
+        raise RuntimeError("Not logged in. Run `dh auth login` first.")
     return DreamhubClient()
 
 
-def _ok(response: Any) -> dict:
+def _ok(response: httpx.Response) -> dict:
     """Return JSON from response, raising on HTTP errors."""
     if response.status_code >= 400:
         return {"error": True, "status": response.status_code, "detail": response.text[:500]}
@@ -138,109 +140,130 @@ def _enrich_response(data: dict, collection_key: str, labels: dict[str, dict[int
 # CRUD tools (generated for each entity type)
 # ---------------------------------------------------------------------------
 
+SINGULAR_NAMES: dict[str, str] = {
+    "companies": "company",
+    "deals": "deal",
+    "leads": "lead",
+    "people": "person",
+    "users": "user",
+    "tasks": "task",
+}
+
+
+def _build_list_fn(entity_path: str, collection_key: str, entity_cfg: dict) -> Any:
+    def list_entities(page: int = 1, page_size: int = 20) -> dict:
+        client = _client()
+        response = client.request(
+            "POST",
+            f"{entity_path}/filter",
+            params={"page": page, "size": page_size},
+            json_payload={"filters": {}},
+        )
+        data = _ok(response)
+        return _enrich_response(data, collection_key, _get_effective_labels(entity_cfg))
+
+    return list_entities
+
+
+def _build_get_fn(entity_path: str, entity_cfg: dict) -> Any:
+    def get_entity(entity_id: str) -> dict:
+        client = _client()
+        response = client.get(f"{entity_path}/{entity_id}")
+        data = _ok(response)
+        labels = _get_effective_labels(entity_cfg)
+        if "error" not in data and labels:
+            _enrich_labels(data, labels)
+        return data
+
+    return get_entity
+
+
+def _build_create_fn(entity_path: str, entity_cfg: dict) -> Any:
+    def create_entity(data: dict) -> dict:
+        client = _client()
+        response = client.post(entity_path, json_payload=data)
+        result = _ok(response)
+        labels = _get_effective_labels(entity_cfg)
+        if "error" not in result and labels:
+            _enrich_labels(result, labels)
+        return result
+
+    return create_entity
+
+
+def _build_update_fn(entity_path: str, entity_cfg: dict) -> Any:
+    def update_entity(entity_id: str, data: dict) -> dict:
+        client = _client()
+        response = client.put(f"{entity_path}/{entity_id}", json_payload=data)
+        result = _ok(response)
+        labels = _get_effective_labels(entity_cfg)
+        if "error" not in result and labels:
+            _enrich_labels(result, labels)
+        return result
+
+    return update_entity
+
+
+def _build_delete_fn(entity_path: str) -> Any:
+    def delete_entity(entity_id: str) -> dict:
+        client = _client()
+        response = client.delete(f"{entity_path}/{entity_id}")
+        if response.status_code == 204:
+            return {"deleted": True, "id": entity_id}
+        return _ok(response)
+
+    return delete_entity
+
+
+def _build_filter_fn(entity_path: str, collection_key: str, entity_cfg: dict) -> Any:
+    def filter_entities(filters: dict, page: int = 1, page_size: int = 20) -> dict:
+        client = _client()
+        response = client.request(
+            "POST",
+            f"{entity_path}/filter",
+            params={"page": page, "size": page_size},
+            json_payload={"filters": filters},
+        )
+        if response.status_code == 404:
+            return {collection_key: [], "total": 0, "page": page, "pageSize": page_size}
+        data = _ok(response)
+        return _enrich_response(data, collection_key, _get_effective_labels(entity_cfg))
+
+    return filter_entities
+
 
 def _register_crud_tools() -> None:
     for entity, cfg in CRUD_ENTITIES.items():
         path = cfg["path"]
         key = cfg["key"]
-        singular = entity.rstrip("s") if not entity.endswith("ies") else entity[:-3] + "y"
+        singular = SINGULAR_NAMES[entity]
 
-        def _make_list(p: str = path, k: str = key, c: dict = cfg) -> Any:
-            def list_entities(page: int = 1, page_size: int = 20) -> dict:
-                client = _client()
-                response = client.request(
-                    "POST", f"{p}/filter", params={"page": page, "size": page_size}, json_payload={"filters": {}}
-                )
-                data = _ok(response)
-                return _enrich_response(data, k, _get_effective_labels(c))
-
-            return list_entities
-
-        def _make_get(p: str = path, c: dict = cfg) -> Any:
-            def get_entity(entity_id: str) -> dict:
-                client = _client()
-                response = client.get(f"{p}/{entity_id}")
-                data = _ok(response)
-                labels = _get_effective_labels(c)
-                if "error" not in data and labels:
-                    _enrich_labels(data, labels)
-                return data
-
-            return get_entity
-
-        def _make_create(p: str = path, c: dict = cfg) -> Any:
-            def create_entity(data: dict) -> dict:
-                client = _client()
-                response = client.post(p, json_payload=data)
-                result = _ok(response)
-                labels = _get_effective_labels(c)
-                if "error" not in result and labels:
-                    _enrich_labels(result, labels)
-                return result
-
-            return create_entity
-
-        def _make_update(p: str = path, c: dict = cfg) -> Any:
-            def update_entity(entity_id: str, data: dict) -> dict:
-                client = _client()
-                response = client.put(f"{p}/{entity_id}", json_payload=data)
-                result = _ok(response)
-                labels = _get_effective_labels(c)
-                if "error" not in result and labels:
-                    _enrich_labels(result, labels)
-                return result
-
-            return update_entity
-
-        def _make_delete(p: str = path) -> Any:
-            def delete_entity(entity_id: str) -> dict:
-                client = _client()
-                response = client.delete(f"{p}/{entity_id}")
-                if response.status_code == 204:
-                    return {"deleted": True, "id": entity_id}
-                return _ok(response)
-
-            return delete_entity
-
-        def _make_filter(p: str = path, k: str = key, c: dict = cfg) -> Any:
-            def filter_entities(filters: dict, page: int = 1, page_size: int = 20) -> dict:
-                client = _client()
-                response = client.request(
-                    "POST", f"{p}/filter", params={"page": page, "size": page_size}, json_payload={"filters": filters}
-                )
-                if response.status_code == 404:
-                    return {k: [], "total": 0, "page": page, "pageSize": page_size}
-                data = _ok(response)
-                return _enrich_response(data, k, _get_effective_labels(c))
-
-            return filter_entities
-
-        list_fn = _make_list()
+        list_fn = _build_list_fn(path, key, cfg)
         list_fn.__name__ = f"list_{entity}"
         list_fn.__doc__ = f"List {entity} (paginated)."
         mcp.tool()(list_fn)
 
-        get_fn = _make_get()
+        get_fn = _build_get_fn(path, cfg)
         get_fn.__name__ = f"get_{singular}"
         get_fn.__doc__ = f"Get a single {singular} by ID."
         mcp.tool()(get_fn)
 
-        create_fn = _make_create()
+        create_fn = _build_create_fn(path, cfg)
         create_fn.__name__ = f"create_{singular}"
         create_fn.__doc__ = f"Create a new {singular}. Pass entity fields as data."
         mcp.tool()(create_fn)
 
-        update_fn = _make_update()
+        update_fn = _build_update_fn(path, cfg)
         update_fn.__name__ = f"update_{singular}"
         update_fn.__doc__ = f"Update an existing {singular}. Pass changed fields as data."
         mcp.tool()(update_fn)
 
-        delete_fn = _make_delete()
+        delete_fn = _build_delete_fn(path)
         delete_fn.__name__ = f"delete_{singular}"
         delete_fn.__doc__ = f"Delete a {singular} by ID."
         mcp.tool()(delete_fn)
 
-        filter_fn = _make_filter()
+        filter_fn = _build_filter_fn(path, key, cfg)
         filter_fn.__name__ = f"filter_{entity}"
         filter_fn.__doc__ = (
             f"Filter {entity} by field conditions. "
@@ -297,6 +320,16 @@ ENTITY_TYPES = {
 }
 
 
+def _resolve_entity_resource(entity_type: str) -> str:
+    """Map entity_type to API resource path, rejecting unknown types."""
+    normalized = entity_type.lower().strip()
+    resource = ENTITY_TYPES.get(normalized)
+    if resource is None:
+        valid = ", ".join(sorted(set(ENTITY_TYPES.values())))
+        raise ValueError(f"Unknown entity type '{entity_type}'. Valid: {valid}")
+    return resource
+
+
 @mcp.tool()
 def list_activities(
     entity_type: str,
@@ -310,7 +343,7 @@ def list_activities(
     size: int = 20,
 ) -> dict:
     """List activities for an entity (deal, company, lead, person, task)."""
-    resource = ENTITY_TYPES.get(entity_type.lower().strip(), entity_type)
+    resource = _resolve_entity_resource(entity_type)
     client = _client()
     payload: dict[str, Any] = {"size": size}
     if activity_types:
@@ -342,11 +375,11 @@ def _enrich_activity(activity: dict) -> dict:
 
 
 @mcp.tool()
-def get_activity(entity_type: str, entity_id: str, activity_id: str) -> dict:
+def get_activity(entity_type: str, entity_id: str, activity_id: str, size: int = 500) -> dict:
     """Get a single activity by ID from an entity's activity list."""
-    resource = ENTITY_TYPES.get(entity_type.lower().strip(), entity_type)
+    resource = _resolve_entity_resource(entity_type)
     client = _client()
-    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload={"size": 500})
+    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload={"size": size})
     data = _ok(response)
     if "error" in data:
         return data
@@ -373,7 +406,7 @@ def create_activity(
     Activity types: 1=Call, 2=Email, 3=Text, 4=In-Person Meeting,
     5=Online Meeting, 6=Quote Sent, 7=NDA Sent, 8=NDA Completed, 9=Note.
     """
-    resource = ENTITY_TYPES.get(entity_type.lower().strip(), entity_type)
+    resource = _resolve_entity_resource(entity_type)
     client = _client()
     payload: dict[str, Any] = {"type": activity_type, "notes": notes, "peopleIds": people_ids or []}
     if company_id:

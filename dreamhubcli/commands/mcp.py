@@ -25,6 +25,8 @@ def _claude_desktop_config_path() -> Path:
         import os
 
         appdata = os.environ.get("APPDATA", "")
+        if not appdata:
+            return Path.home() / "AppData" / "Roaming" / "Claude" / "claude_desktop_config.json"
         return Path(appdata) / "Claude" / "claude_desktop_config.json"
     return Path.home() / ".claude" / "claude_desktop_config.json"
 
