@@ -52,10 +52,19 @@ def load_config() -> DreamhubConfig:
 
 
 def save_config(config: DreamhubConfig) -> None:
-    """Persist configuration to disk."""
+    """Persist configuration to disk with owner-only permissions."""
     ensure_config_dir()
-    with open(CONFIG_FILE, "wb") as file:
-        tomli_w.dump(config.model_dump(exclude_none=True), file)
+    CONFIG_DIR.chmod(0o700)
+    data = config.model_dump(exclude_none=True)
+    tmp_path = CONFIG_FILE.with_suffix(".toml.tmp")
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as file:
+            tomli_w.dump(data, file)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    tmp_path.rename(CONFIG_FILE)
 
 
 def is_dev_environment() -> bool:

@@ -193,6 +193,9 @@ class TestClient401Refresh:
         response = client.get("companies")
         assert response.status_code == 200
         assert route.call_count == 2
+        # Verify the retry used the refreshed token, not the expired one
+        retry_auth = route.calls[1].request.headers["authorization"]
+        assert retry_auth == "Bearer new_token"
 
     @respx.mock
     def test_401_returns_401_when_refresh_fails(self, temp_config_dir: Path) -> None:
@@ -210,3 +213,13 @@ class TestClient401Refresh:
         client = DreamhubClient(api_url="https://api.test/v1")
         response = client.get("companies")
         assert response.status_code == 401
+
+    @respx.mock
+    def test_401_post_not_retried(self, temp_config_dir: Path) -> None:
+        """POST 401 is not automatically retried to avoid duplicate side effects."""
+        save_config(DreamhubConfig(token="expired_token", refresh_token="refresh_abc"))
+        route = respx.post("https://api.test/v1/companies").mock(return_value=httpx.Response(401, text="Unauthorized"))
+        client = DreamhubClient(api_url="https://api.test/v1")
+        response = client.post("companies", json_payload={"name": "Acme"})
+        assert response.status_code == 401
+        assert route.call_count == 1  # not retried

@@ -96,8 +96,11 @@ class DreamhubClient:
             _print_error(f"Network error: {exc}")
             raise typer.Exit(code=1)
 
-        # 401 — try refreshing the token once before giving up
-        if response.status_code == 401 and refresh_access_token():
+        # 401 — retry once with a refreshed token, but only for idempotent methods
+        # to avoid duplicating side effects on POST/PATCH/DELETE.
+        _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS", "PUT"}
+        _is_idempotent = method.upper() in _IDEMPOTENT_METHODS or "Idempotency-Key" in (extra_headers or {})
+        if response.status_code == 401 and _is_idempotent and refresh_access_token():
             request_kwargs["headers"] = self._build_headers(extra_headers)
             try:
                 with httpx.Client(timeout=self.timeout) as http:

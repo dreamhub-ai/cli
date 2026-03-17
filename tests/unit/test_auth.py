@@ -49,6 +49,12 @@ class TestLoginWithToken:
         assert config.token == "new_token"
         assert config.tenant_id == "existing-tenant"
 
+    def test_clears_refresh_token_when_not_provided(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="old", refresh_token="old_refresh"))
+        config = login_with_token("pat_new")
+        assert config.token == "pat_new"
+        assert config.refresh_token is None
+
 
 class TestLogout:
     def test_clears_credentials(self, temp_config_dir: Path) -> None:

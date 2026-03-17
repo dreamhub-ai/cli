@@ -28,8 +28,7 @@ def login_with_token(
     config.token = token
     if tenant_id is not None:
         config.tenant_id = tenant_id
-    if refresh_token is not None:
-        config.refresh_token = refresh_token
+    config.refresh_token = refresh_token
     save_config(config)
     return config
 

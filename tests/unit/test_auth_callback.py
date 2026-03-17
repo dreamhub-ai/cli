@@ -307,5 +307,6 @@ class TestRunBrowserFlowSuccess:
             access_token, refresh_token, tenant_id = run_browser_flow()
 
             assert access_token == fake_token
+            assert refresh_token == "refresh_tok"
             assert tenant_id == fake_tenant
             mock_browser.assert_called_once()
