@@ -233,17 +233,19 @@ class TestRunBrowserFlowErrors:
 class TestExchangeCode:
     @respx.mock
     def test_exchange_code_success(self, temp_config_dir: Path) -> None:
-        """POSTs to token endpoint and returns (access_token, tenant_id)."""
+        """POSTs to token endpoint and returns (access_token, refresh_token, tenant_id)."""
         token_url_pattern = respx.post(url__regex=r".*/oauth/token$").respond(
             200,
             json={
                 "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test",
+                "refresh_token": "refresh_xyz",
                 "token_type": "Bearer",
                 "tenantId": "tenant-abc-123",
             },
         )
-        access_token, tenant_id = _exchange_code("auth_code_xyz", "verifier_abc")
+        access_token, refresh_token, tenant_id = _exchange_code("auth_code_xyz", "verifier_abc")
         assert access_token == "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test"
+        assert refresh_token == "refresh_xyz"
         assert tenant_id == "tenant-abc-123"
         assert token_url_pattern.called
 
@@ -279,7 +281,7 @@ class TestRunBrowserFlowSuccess:
 
         with (
             patch("dreamhubcli.auth_callback.webbrowser.open") as mock_browser,
-            patch("dreamhubcli.auth_callback._exchange_code", return_value=(fake_token, fake_tenant)),
+            patch("dreamhubcli.auth_callback._exchange_code", return_value=(fake_token, "refresh_tok", fake_tenant)),
             patch("dreamhubcli.auth_callback.secrets.token_urlsafe", side_effect=_capture_state),
         ):
             # The first call to token_urlsafe is for the PKCE verifier (32 bytes),
@@ -302,8 +304,9 @@ class TestRunBrowserFlowSuccess:
             callback_thread = threading.Thread(target=_delayed_callback, daemon=True)
             callback_thread.start()
 
-            access_token, tenant_id = run_browser_flow()
+            access_token, refresh_token, tenant_id = run_browser_flow()
 
             assert access_token == fake_token
+            assert refresh_token == "refresh_tok"
             assert tenant_id == fake_tenant
             mock_browser.assert_called_once()

@@ -10,7 +10,7 @@ import httpx
 import typer
 
 from dreamhubcli import __version__
-from dreamhubcli.auth import get_auth_headers
+from dreamhubcli.auth import get_auth_headers, is_token_expired, refresh_access_token
 from dreamhubcli.output import print_error as _print_error
 from dreamhubcli.output import print_warning as _print_warning
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30.0
 USER_AGENT = f"dreamhub-cli/{__version__}"
 _MAX_RETRIES = 3
+_IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS", "PUT"}
 
 
 class DreamhubClient:
@@ -52,6 +53,14 @@ class DreamhubClient:
             return path
         return f"{self.base_url}/{path.lstrip('/')}"
 
+    def _maybe_refresh_proactively(self) -> None:
+        """Refresh the access token if it's expired, before making a request."""
+        from dreamhubcli.config import load_config
+
+        config = load_config()
+        if config.token and config.refresh_token and is_token_expired(config.token):
+            refresh_access_token()
+
     def request(
         self,
         method: str,
@@ -62,10 +71,12 @@ class DreamhubClient:
         extra_headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         """Execute an HTTP request against the Dreamhub API."""
+        self._maybe_refresh_proactively()
+
         url = self._build_url(path)
         headers = self._build_headers(extra_headers)
 
-        request_kwargs = {
+        request_kwargs: dict[str, Any] = {
             "method": method,
             "url": url,
             "headers": headers,
@@ -85,6 +96,18 @@ class DreamhubClient:
         except httpx.RequestError as exc:
             _print_error(f"Network error: {exc}")
             raise typer.Exit(code=1)
+
+        # 401 — retry once with a refreshed token, but only for idempotent methods
+        # to avoid duplicating side effects on POST/PATCH/DELETE.
+        _extra_header_names = {k.lower() for k in (extra_headers or {})}
+        _is_idempotent = method.upper() in _IDEMPOTENT_METHODS or "idempotency-key" in _extra_header_names
+        if response.status_code == 401 and _is_idempotent and refresh_access_token():
+            request_kwargs["headers"] = self._build_headers(extra_headers)
+            try:
+                with httpx.Client(timeout=self.timeout) as http:
+                    response = http.request(**request_kwargs)
+            except httpx.RequestError:
+                pass
 
         # 429 retry with linear backoff (max 3 retries)
         if response.status_code == 429:
