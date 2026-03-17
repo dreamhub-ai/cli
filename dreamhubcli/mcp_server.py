@@ -16,12 +16,65 @@ mcp = FastMCP("dreamhub", instructions="Dreamhub CRM tools. Requires `dh auth lo
 # ---------------------------------------------------------------------------
 
 CRUD_ENTITIES = {
-    "companies": {"path": "companies", "key": "companies"},
-    "deals": {"path": "deals", "key": "deals"},
-    "leads": {"path": "leads", "key": "leads"},
-    "people": {"path": "people", "key": "people"},
-    "users": {"path": "users", "key": "users"},
-    "tasks": {"path": "tasks", "key": "tasks"},
+    "companies": {
+        "path": "companies",
+        "key": "companies",
+        "labels": {"status": {1: "Prospect", 2: "Customer", 3: "Churned", 4: "On Hold", 5: "Disqualified"}},
+    },
+    "deals": {
+        "path": "deals",
+        "key": "deals",
+        "labels": {
+            "status": {1: "In Progress", 2: "Stuck", 4: "Won", 5: "Lost"},
+            "stage": {
+                1: "Prospecting",
+                2: "Demo",
+                3: "Demo to DMs",
+                4: "Waiting Data POC",
+                5: "POC",
+                6: "Pilot",
+                7: "Proposal",
+                8: "Negotiation",
+                9: "Closed Won",
+                10: "Closed Lost",
+            },
+        },
+    },
+    "leads": {
+        "path": "leads",
+        "key": "leads",
+        "labels": {
+            "status": {1: "Disqualified", 2: "Qualified", 3: "Converted", 4: "Stuck", 5: "New", 6: "In Progress"},
+        },
+    },
+    "people": {
+        "path": "people",
+        "key": "people",
+        "labels": {
+            "status": {
+                1: "New",
+                2: "Greenfield",
+                3: "Engaged in Deal",
+                4: "Engaged in Lead",
+                5: "Engaged",
+                6: "Active Customer",
+                7: "Disqualified",
+            },
+        },
+    },
+    "users": {
+        "path": "users",
+        "key": "users",
+        "labels": {"status": {1: "Active", 2: "Inactive", 3: "Pending", 4: "Expired"}},
+    },
+    "tasks": {
+        "path": "tasks",
+        "key": "tasks",
+        "labels": {
+            "isCompleted": {1: "Completed", 0: "Open"},
+            "isHighPriority": {1: "High", 0: "Normal"},
+        },
+    },
 }
 
 
@@ -37,6 +90,25 @@ def _ok(response: Any) -> dict:
     return response.json()
 
 
+def _enrich_labels(record: dict, labels: dict[str, dict[int, str]]) -> dict:
+    """Add human-readable *Name fields for integer-coded fields."""
+    for field, mapping in labels.items():
+        value = record.get(field)
+        if isinstance(value, int) and value in mapping:
+            record[f"{field}Name"] = mapping[value]
+    return record
+
+
+def _enrich_response(data: dict, collection_key: str, labels: dict[str, dict[int, str]]) -> dict:
+    """Enrich a list response by resolving labels on each row."""
+    if "error" in data or not labels:
+        return data
+    rows = data.get(collection_key, [])
+    for row in rows:
+        _enrich_labels(row, labels)
+    return data
+
+
 # ---------------------------------------------------------------------------
 # CRUD tools (generated for each entity type)
 # ---------------------------------------------------------------------------
@@ -46,43 +118,54 @@ def _register_crud_tools() -> None:
     for entity, cfg in CRUD_ENTITIES.items():
         path = cfg["path"]
         key = cfg["key"]
+        labels = cfg.get("labels", {})
         singular = entity.rstrip("s") if not entity.endswith("ies") else entity[:-3] + "y"
 
-        def _make_list(p: str = path, k: str = key) -> Any:
+        def _make_list(p: str = path, k: str = key, lbl: dict = labels) -> Any:
             def list_entities(page: int = 1, page_size: int = 20) -> dict:
                 client = _client()
                 response = client.request(
                     "POST", f"{p}/filter", params={"page": page, "size": page_size}, json_payload={"filters": {}}
                 )
-                return _ok(response)
+                data = _ok(response)
+                return _enrich_response(data, k, lbl)
 
             return list_entities
 
-        def _make_get(p: str = path, s: str = singular) -> Any:
+        def _make_get(p: str = path, lbl: dict = labels) -> Any:
             def get_entity(entity_id: str) -> dict:
                 client = _client()
                 response = client.get(f"{p}/{entity_id}")
-                return _ok(response)
+                data = _ok(response)
+                if "error" not in data and lbl:
+                    _enrich_labels(data, lbl)
+                return data
 
             return get_entity
 
-        def _make_create(p: str = path, s: str = singular) -> Any:
+        def _make_create(p: str = path, lbl: dict = labels) -> Any:
             def create_entity(data: dict) -> dict:
                 client = _client()
                 response = client.post(p, json_payload=data)
-                return _ok(response)
+                result = _ok(response)
+                if "error" not in result and lbl:
+                    _enrich_labels(result, lbl)
+                return result
 
             return create_entity
 
-        def _make_update(p: str = path, s: str = singular) -> Any:
+        def _make_update(p: str = path, lbl: dict = labels) -> Any:
             def update_entity(entity_id: str, data: dict) -> dict:
                 client = _client()
                 response = client.put(f"{p}/{entity_id}", json_payload=data)
-                return _ok(response)
+                result = _ok(response)
+                if "error" not in result and lbl:
+                    _enrich_labels(result, lbl)
+                return result
 
             return update_entity
 
-        def _make_delete(p: str = path, s: str = singular) -> Any:
+        def _make_delete(p: str = path) -> Any:
             def delete_entity(entity_id: str) -> dict:
                 client = _client()
                 response = client.delete(f"{p}/{entity_id}")
@@ -92,7 +175,7 @@ def _register_crud_tools() -> None:
 
             return delete_entity
 
-        def _make_filter(p: str = path, k: str = key) -> Any:
+        def _make_filter(p: str = path, k: str = key, lbl: dict = labels) -> Any:
             def filter_entities(filters: dict, page: int = 1, page_size: int = 20) -> dict:
                 client = _client()
                 response = client.request(
@@ -100,7 +183,8 @@ def _register_crud_tools() -> None:
                 )
                 if response.status_code == 404:
                     return {k: [], "total": 0, "page": page, "pageSize": page_size}
-                return _ok(response)
+                data = _ok(response)
+                return _enrich_response(data, k, lbl)
 
             return filter_entities
 
@@ -199,7 +283,19 @@ def list_activities(
     if tags:
         payload["activitiesTags"] = tags
     response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload=payload)
-    return _ok(response)
+    data = _ok(response)
+    if "error" not in data:
+        for activity in data.get("activities", []):
+            _enrich_activity(activity)
+    return data
+
+
+def _enrich_activity(activity: dict) -> dict:
+    """Add typeName to an activity record."""
+    type_id = activity.get("type")
+    if isinstance(type_id, int) and type_id in ACTIVITY_TYPES:
+        activity["typeName"] = ACTIVITY_TYPES[type_id]
+    return activity
 
 
 @mcp.tool()
@@ -213,7 +309,7 @@ def get_activity(entity_type: str, entity_id: str, activity_id: str) -> dict:
         return data
     for activity in data.get("activities", []):
         if activity.get("id") == activity_id:
-            return activity
+            return _enrich_activity(activity)
     return {"error": True, "detail": f"Activity '{activity_id}' not found on {entity_id}."}
 
 
