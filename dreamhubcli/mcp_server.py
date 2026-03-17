@@ -26,19 +26,8 @@ CRUD_ENTITIES = {
         "key": "deals",
         "labels": {
             "status": {1: "In Progress", 2: "Stuck", 4: "Won", 5: "Lost"},
-            "stage": {
-                1: "Prospecting",
-                2: "Demo",
-                3: "Demo to DMs",
-                4: "Waiting Data POC",
-                5: "POC",
-                6: "Pilot",
-                7: "Proposal",
-                8: "Negotiation",
-                9: "Closed Won",
-                10: "Closed Lost",
-            },
         },
+        "dynamic_labels": ["stage"],
     },
     "leads": {
         "path": "leads",
@@ -90,6 +79,31 @@ def _ok(response: Any) -> dict:
     return response.json()
 
 
+# ---------------------------------------------------------------------------
+# Dynamic label resolution (stages are tenant-configured)
+# ---------------------------------------------------------------------------
+
+_stage_cache: dict[int, str] | None = None
+
+
+def _fetch_stage_map() -> dict[int, str]:
+    """Fetch deal stages from the API and cache them."""
+    global _stage_cache
+    if _stage_cache is not None:
+        return _stage_cache
+    try:
+        client = _client()
+        response = client.get("deals/stages")
+        if response.status_code < 400:
+            data = response.json()
+            stages = data if isinstance(data, list) else data.get("stages", [])
+            _stage_cache = {s["id"]: s["name"] for s in stages if "id" in s and "name" in s}
+            return _stage_cache
+    except Exception:
+        pass
+    return {}
+
+
 def _enrich_labels(record: dict, labels: dict[str, dict[int, str]]) -> dict:
     """Add human-readable *Name fields for integer-coded fields."""
     for field, mapping in labels.items():
@@ -97,6 +111,17 @@ def _enrich_labels(record: dict, labels: dict[str, dict[int, str]]) -> dict:
         if isinstance(value, int) and value in mapping:
             record[f"{field}Name"] = mapping[value]
     return record
+
+
+def _get_effective_labels(cfg: dict) -> dict[str, dict[int, str]]:
+    """Build the full label map for an entity, including dynamic labels."""
+    labels = dict(cfg.get("labels", {}))
+    for field in cfg.get("dynamic_labels", []):
+        if field == "stage":
+            stage_map = _fetch_stage_map()
+            if stage_map:
+                labels["stage"] = stage_map
+    return labels
 
 
 def _enrich_response(data: dict, collection_key: str, labels: dict[str, dict[int, str]]) -> dict:
@@ -118,49 +143,51 @@ def _register_crud_tools() -> None:
     for entity, cfg in CRUD_ENTITIES.items():
         path = cfg["path"]
         key = cfg["key"]
-        labels = cfg.get("labels", {})
         singular = entity.rstrip("s") if not entity.endswith("ies") else entity[:-3] + "y"
 
-        def _make_list(p: str = path, k: str = key, lbl: dict = labels) -> Any:
+        def _make_list(p: str = path, k: str = key, c: dict = cfg) -> Any:
             def list_entities(page: int = 1, page_size: int = 20) -> dict:
                 client = _client()
                 response = client.request(
                     "POST", f"{p}/filter", params={"page": page, "size": page_size}, json_payload={"filters": {}}
                 )
                 data = _ok(response)
-                return _enrich_response(data, k, lbl)
+                return _enrich_response(data, k, _get_effective_labels(c))
 
             return list_entities
 
-        def _make_get(p: str = path, lbl: dict = labels) -> Any:
+        def _make_get(p: str = path, c: dict = cfg) -> Any:
             def get_entity(entity_id: str) -> dict:
                 client = _client()
                 response = client.get(f"{p}/{entity_id}")
                 data = _ok(response)
-                if "error" not in data and lbl:
-                    _enrich_labels(data, lbl)
+                labels = _get_effective_labels(c)
+                if "error" not in data and labels:
+                    _enrich_labels(data, labels)
                 return data
 
             return get_entity
 
-        def _make_create(p: str = path, lbl: dict = labels) -> Any:
+        def _make_create(p: str = path, c: dict = cfg) -> Any:
             def create_entity(data: dict) -> dict:
                 client = _client()
                 response = client.post(p, json_payload=data)
                 result = _ok(response)
-                if "error" not in result and lbl:
-                    _enrich_labels(result, lbl)
+                labels = _get_effective_labels(c)
+                if "error" not in result and labels:
+                    _enrich_labels(result, labels)
                 return result
 
             return create_entity
 
-        def _make_update(p: str = path, lbl: dict = labels) -> Any:
+        def _make_update(p: str = path, c: dict = cfg) -> Any:
             def update_entity(entity_id: str, data: dict) -> dict:
                 client = _client()
                 response = client.put(f"{p}/{entity_id}", json_payload=data)
                 result = _ok(response)
-                if "error" not in result and lbl:
-                    _enrich_labels(result, lbl)
+                labels = _get_effective_labels(c)
+                if "error" not in result and labels:
+                    _enrich_labels(result, labels)
                 return result
 
             return update_entity
@@ -175,7 +202,7 @@ def _register_crud_tools() -> None:
 
             return delete_entity
 
-        def _make_filter(p: str = path, k: str = key, lbl: dict = labels) -> Any:
+        def _make_filter(p: str = path, k: str = key, c: dict = cfg) -> Any:
             def filter_entities(filters: dict, page: int = 1, page_size: int = 20) -> dict:
                 client = _client()
                 response = client.request(
@@ -184,7 +211,7 @@ def _register_crud_tools() -> None:
                 if response.status_code == 404:
                     return {k: [], "total": 0, "page": page, "pageSize": page_size}
                 data = _ok(response)
-                return _enrich_response(data, k, lbl)
+                return _enrich_response(data, k, _get_effective_labels(c))
 
             return filter_entities
 
@@ -223,6 +250,22 @@ def _register_crud_tools() -> None:
 
 
 _register_crud_tools()
+
+
+# ---------------------------------------------------------------------------
+# Deal stages (tenant-configured)
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def list_deal_stages(include_additional_info: bool = False) -> list[dict] | dict:
+    """List deal pipeline stages for this account. Stages are tenant-configured."""
+    client = _client()
+    params: dict[str, Any] = {}
+    if include_additional_info:
+        params["include_additional_info"] = True
+    response = client.get("deals/stages", params=params)
+    return _ok(response)
 
 
 # ---------------------------------------------------------------------------
