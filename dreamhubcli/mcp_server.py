@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
@@ -9,6 +10,8 @@ from fastmcp import FastMCP
 
 from dreamhubcli.auth import is_authenticated
 from dreamhubcli.client import DreamhubClient
+
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP("dreamhub", instructions="Dreamhub CRM tools. Requires `dh auth login` first.")
 
@@ -102,7 +105,7 @@ def _fetch_stage_map() -> dict[int, str]:
             _stage_cache = {s["id"]: s["name"] for s in stages if "id" in s and "name" in s}
             return _stage_cache
     except Exception:
-        pass
+        logger.debug("Failed to fetch deal stages", exc_info=True)
     return {}
 
 
