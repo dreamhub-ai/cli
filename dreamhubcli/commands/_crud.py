@@ -150,7 +150,7 @@ def build_crud_app(
                 response = client.request(
                     "POST",
                     f"{resource_path}/filter",
-                    params={"page": page, "size": page_size},
+                    params={"page": page, "size": page_size, "include_additionals": "true"},
                     json_payload={"filters": {}},
                 )
         except KeyboardInterrupt:
@@ -193,7 +193,7 @@ def build_crud_app(
         client = DreamhubClient(api_url=api_url)
         try:
             with console.status(f"Fetching {singular} {entity_id}...", spinner="dots"):
-                response = client.get(f"{resource_path}/{entity_id}")
+                response = client.get(f"{resource_path}/{entity_id}", params={"include_additionals": "true"})
                 handle_response(
                     response,
                     verbose=ctx.obj.get("verbose", False),
@@ -361,7 +361,7 @@ def build_crud_app(
                 response = client.request(
                     "POST",
                     f"{resource_path}/filter",
-                    params={"page": page, "size": page_size},
+                    params={"page": page, "size": page_size, "include_additionals": "true"},
                     json_payload=parsed_payload,
                 )
         except KeyboardInterrupt:
