@@ -138,11 +138,16 @@ def build_crud_app(
         page: int = typer.Option(1, "--page", "-p", help="Page number."),
         page_size: int = typer.Option(20, "--page-size", "-s", help="Results per page."),
         use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
+        all_fields: bool = typer.Option(False, "--all-fields", help="Show all fields in output."),
+        fields: str | None = typer.Option(None, "--fields", help="Comma-separated list of fields to show."),
         api_url: str | None = typer.Option(None, "--api-url", help="Override API base URL."),
     ) -> None:
         require_auth()
         if page < 1 or page_size < 1:
             print_error("--page and --page-size must be >= 1")
+            raise typer.Exit(code=1)
+        if all_fields and fields:
+            print_error("--all-fields and --fields are mutually exclusive")
             raise typer.Exit(code=1)
         client = DreamhubClient(api_url=api_url)
         try:
@@ -169,9 +174,10 @@ def build_crud_app(
             rows = data.get(collection_key, [])
             total = data.get("total", len(rows))
             current_page = data.get("page", page)
+            columns_override = None if all_fields else ([f.strip() for f in fields.split(",")] if fields else display_columns)
             print_table(
                 rows,
-                columns=display_columns,
+                columns=columns_override,
                 title=name.title(),
                 status_columns=status_columns,
                 label_maps=label_maps,
@@ -327,11 +333,16 @@ def build_crud_app(
         page: int = typer.Option(1, "--page", "-p", help="Page number."),
         page_size: int = typer.Option(20, "--page-size", "-s", help="Results per page."),
         use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),
+        all_fields: bool = typer.Option(False, "--all-fields", help="Show all fields in output."),
+        fields: str | None = typer.Option(None, "--fields", help="Comma-separated list of fields to show."),
         api_url: str | None = typer.Option(None, "--api-url", help="Override API base URL."),
     ) -> None:
         require_auth()
         if page < 1 or page_size < 1:
             print_error("--page and --page-size must be >= 1")
+            raise typer.Exit(code=1)
+        if all_fields and fields:
+            print_error("--all-fields and --fields are mutually exclusive")
             raise typer.Exit(code=1)
         parsed_payload: dict[str, Any]
         extra_args = ctx.args
@@ -381,9 +392,10 @@ def build_crud_app(
             rows = data.get(collection_key, [])
             total = data.get("total", len(rows))
             current_page = data.get("page", page)
+            columns_override = None if all_fields else ([f.strip() for f in fields.split(",")] if fields else display_columns)
             print_table(
                 rows,
-                columns=display_columns,
+                columns=columns_override,
                 title=name.title(),
                 status_columns=status_columns,
                 label_maps=label_maps,
