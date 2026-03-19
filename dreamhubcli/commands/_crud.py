@@ -15,6 +15,19 @@ from dreamhubcli.client import DreamhubClient
 from dreamhubcli.errors import handle_response, require_auth
 from dreamhubcli.output import console, print_detail, print_error, print_json, print_success, print_table
 
+
+def _resolve_columns(
+    all_fields: bool,
+    fields: str | None,
+    default: list[str] | None,
+) -> list[str] | None:
+    if all_fields:
+        return None
+    if fields:
+        return [f.strip() for f in fields.split(",")]
+    return default
+
+
 _FILTER_OPERATORS = {
     "eq",
     "ne",
@@ -174,7 +187,7 @@ def build_crud_app(
             rows = data.get(collection_key, [])
             total = data.get("total", len(rows))
             current_page = data.get("page", page)
-            columns_override = None if all_fields else ([f.strip() for f in fields.split(",")] if fields else display_columns)
+            columns_override = _resolve_columns(all_fields, fields, display_columns)
             print_table(
                 rows,
                 columns=columns_override,
@@ -392,7 +405,7 @@ def build_crud_app(
             rows = data.get(collection_key, [])
             total = data.get("total", len(rows))
             current_page = data.get("page", page)
-            columns_override = None if all_fields else ([f.strip() for f in fields.split(",")] if fields else display_columns)
+            columns_override = _resolve_columns(all_fields, fields, display_columns)
             print_table(
                 rows,
                 columns=columns_override,
