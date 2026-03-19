@@ -21,6 +21,11 @@ def _resolve_columns(
     fields: str | None,
     default: list[str] | None,
 ) -> list[str] | None:
+    """Determine columns for table output based on CLI flags.
+
+    Returns None (show all) if all_fields is set, a split list if fields
+    is provided, or the default otherwise.
+    """
     if all_fields:
         return None
     if fields:
