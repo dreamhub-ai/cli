@@ -37,9 +37,7 @@ class TestCheckForUpdateNotice:
     @respx.mock
     def test_prints_notice_when_newer_version_available(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig())
-        respx.get(GITHUB_RELEASES_URL).mock(
-            return_value=httpx.Response(200, json={"tag_name": "v99.0.0"})
-        )
+        respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": "v99.0.0"}))
         with patch("dreamhubcli.commands.update.print_warning") as mock_warn:
             check_for_update_notice()
         mock_warn.assert_called_once()
@@ -50,9 +48,7 @@ class TestCheckForUpdateNotice:
         save_config(DreamhubConfig())
         from dreamhubcli import __version__
 
-        respx.get(GITHUB_RELEASES_URL).mock(
-            return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"})
-        )
+        respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"}))
         with patch("dreamhubcli.commands.update.print_warning") as mock_warn:
             check_for_update_notice()
         mock_warn.assert_not_called()
@@ -61,13 +57,13 @@ class TestCheckForUpdateNotice:
     def test_skips_check_within_24h(self, temp_config_dir: Path) -> None:
         import time
 
-        save_config(DreamhubConfig(
-            last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            latest_known_version="1.2.0",
-        ))
-        route = respx.get(GITHUB_RELEASES_URL).mock(
-            return_value=httpx.Response(200, json={"tag_name": "v99.0.0"})
+        save_config(
+            DreamhubConfig(
+                last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                latest_known_version="1.2.0",
+            )
         )
+        route = respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": "v99.0.0"}))
         check_for_update_notice()
         assert not route.called
 
@@ -75,10 +71,12 @@ class TestCheckForUpdateNotice:
     def test_shows_cached_notice_within_24h(self, temp_config_dir: Path) -> None:
         import time
 
-        save_config(DreamhubConfig(
-            last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            latest_known_version="99.0.0",
-        ))
+        save_config(
+            DreamhubConfig(
+                last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                latest_known_version="99.0.0",
+            )
+        )
         with patch("dreamhubcli.commands.update.print_warning") as mock_warn:
             check_for_update_notice()
         mock_warn.assert_called_once()
@@ -89,9 +87,7 @@ class TestCheckForUpdateNotice:
         save_config(DreamhubConfig())
         from dreamhubcli import __version__
 
-        respx.get(GITHUB_RELEASES_URL).mock(
-            return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"})
-        )
+        respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"}))
         check_for_update_notice()
         config = load_config()
         assert config.last_version_check is not None

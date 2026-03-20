@@ -84,9 +84,7 @@ class TestCreateCliPat:
         config = DreamhubConfig(token=jwt, tenant_id="my-tenant")
         save_config(config)
 
-        route = respx.post(PAT_ENDPOINT).mock(
-            return_value=httpx.Response(201, json={"id": "p1", "token": "pat_t"})
-        )
+        route = respx.post(PAT_ENDPOINT).mock(return_value=httpx.Response(201, json={"id": "p1", "token": "pat_t"}))
         create_cli_pat(config)
         assert route.calls[0].request.headers["x-tenant-id"] == "my-tenant"
 
@@ -180,14 +178,16 @@ class TestRotateCliPat:
 
 class TestLogoutClearsPatFields:
     def test_logout_clears_pat(self, temp_config_dir: Path) -> None:
-        save_config(DreamhubConfig(
-            token="pat_test",
-            refresh_token="refresh_abc",
-            tenant_id="t-1",
-            cli_pat="pat_backup",
-            cli_pat_id="pat-id-1",
-            cli_pat_created_at="2026-01-01T00:00:00Z",
-        ))
+        save_config(
+            DreamhubConfig(
+                token="pat_test",
+                refresh_token="refresh_abc",
+                tenant_id="t-1",
+                cli_pat="pat_backup",
+                cli_pat_id="pat-id-1",
+                cli_pat_created_at="2026-01-01T00:00:00Z",
+            )
+        )
         config = logout()
         assert config.cli_pat is None
         assert config.cli_pat_id is None
@@ -200,23 +200,21 @@ class TestClientPatFallback:
     @respx.mock
     def test_proactive_refresh_promotes_pat_on_jwt_failure(self, temp_config_dir: Path) -> None:
         expired_jwt = _make_jwt({"exp": int(time.time()) - 60})
-        save_config(DreamhubConfig(
-            token=expired_jwt,
-            refresh_token="bad_refresh",
-            tenant_id="t-1",
-            cli_pat="pat_fallback",
-            cli_pat_id="pat-id-1",
-            cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        ))
+        save_config(
+            DreamhubConfig(
+                token=expired_jwt,
+                refresh_token="bad_refresh",
+                tenant_id="t-1",
+                cli_pat="pat_fallback",
+                cli_pat_id="pat-id-1",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            )
+        )
 
         # JWT refresh will fail
-        respx.post(url__regex=r".*/oauth/token$").mock(
-            return_value=httpx.Response(401, text="invalid refresh token")
-        )
+        respx.post(url__regex=r".*/oauth/token$").mock(return_value=httpx.Response(401, text="invalid refresh token"))
         # API call with PAT succeeds
-        respx.get(f"{DEFAULT_API_URL}/companies").mock(
-            return_value=httpx.Response(200, json={"companies": []})
-        )
+        respx.get(f"{DEFAULT_API_URL}/companies").mock(return_value=httpx.Response(200, json={"companies": []}))
 
         from dreamhubcli.client import DreamhubClient
 
@@ -230,13 +228,15 @@ class TestClientPatFallback:
 
     @respx.mock
     def test_401_handler_promotes_pat_when_refresh_fails(self, temp_config_dir: Path) -> None:
-        save_config(DreamhubConfig(
-            token="pat_not_a_jwt",
-            tenant_id="t-1",
-            cli_pat="pat_backup_token",
-            cli_pat_id="pat-id-2",
-            cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        ))
+        save_config(
+            DreamhubConfig(
+                token="pat_not_a_jwt",
+                tenant_id="t-1",
+                cli_pat="pat_backup_token",
+                cli_pat_id="pat-id-2",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            )
+        )
 
         # First request returns 401, second (with PAT) succeeds
         respx.get(f"{DEFAULT_API_URL}/companies").mock(
@@ -258,16 +258,16 @@ class TestClientPatFallback:
     @respx.mock
     def test_401_handler_no_double_promote(self, temp_config_dir: Path) -> None:
         """If token already IS the PAT, don't re-promote on 401."""
-        save_config(DreamhubConfig(
-            token="pat_same_token",
-            tenant_id="t-1",
-            cli_pat="pat_same_token",
-            cli_pat_id="pat-id-3",
-        ))
-
-        respx.get(f"{DEFAULT_API_URL}/companies").mock(
-            return_value=httpx.Response(401, text="Unauthorized")
+        save_config(
+            DreamhubConfig(
+                token="pat_same_token",
+                tenant_id="t-1",
+                cli_pat="pat_same_token",
+                cli_pat_id="pat-id-3",
+            )
         )
+
+        respx.get(f"{DEFAULT_API_URL}/companies").mock(return_value=httpx.Response(401, text="Unauthorized"))
 
         from dreamhubcli.client import DreamhubClient
 
