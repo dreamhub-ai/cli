@@ -6,7 +6,14 @@ import typer
 from rich.panel import Panel
 
 from dreamhubcli import __version__
-from dreamhubcli.auth import is_authenticated, login_with_browser, login_with_token, logout
+from dreamhubcli.auth import (
+    create_cli_pat,
+    delete_cli_pat,
+    is_authenticated,
+    login_with_browser,
+    login_with_token,
+    logout,
+)
 from dreamhubcli.client import DreamhubClient
 from dreamhubcli.errors import handle_response
 from dreamhubcli.output import console, print_error, print_success
@@ -15,10 +22,25 @@ app = typer.Typer(name="auth", help="Manage authentication credentials.", no_arg
 
 
 @app.command(
-    epilog="\b\nExamples:\n  dh auth login --token pat_xxx --tenant-id my-tenant\n  dh auth login",
+    epilog=(
+        "\b\nExamples:\n"
+        "  dh auth login                          # Opens browser for OAuth login\n"
+        "  dh auth login --token pat_xxx          # Login with a Personal Access Token\n"
+        "  dh auth login --token pat_xxx --tenant-id my-tenant\n"
+        "\n"
+        "Personal Access Tokens (PATs):\n"
+        "  PATs are long-lived API keys for use in CI/CD, scripts, or headless servers.\n"
+        "  Create one at: Settings > API Keys in the Dreamhub web app.\n"
+        "  Pass it with --token or set the DH_TOKEN environment variable."
+    ),
 )
 def login(
-    token: Optional[str] = typer.Option(None, "--token", "-t", help="Personal access token (PAT)."),
+    token: Optional[str] = typer.Option(
+        None,
+        "--token",
+        "-t",
+        help="Personal access token (PAT). Create one at Settings > API Keys in the web app.",
+    ),
     tenant_id: Optional[str] = typer.Option(None, "--tenant-id", help="Tenant ID for x-tenant-id header."),
 ) -> None:
     """Authenticate with Dreamhub. Pass --token for PAT login, or omit to open the browser."""
@@ -27,7 +49,8 @@ def login(
         print_success("Logged in successfully with PAT.")
         console.print("[dim]Tip: Run 'dh --install-completion' to enable tab completion in your shell.[/dim]")
     else:
-        login_with_browser()
+        config = login_with_browser()
+        create_cli_pat(config)
         print_success("Logged in successfully via browser.")
         console.print("[dim]Tip: Run 'dh --install-completion' to enable tab completion in your shell.[/dim]")
 
@@ -91,5 +114,9 @@ def status() -> None:
 )
 def do_logout() -> None:
     """Clear stored credentials."""
+    from dreamhubcli.config import load_config
+
+    config = load_config()
+    delete_cli_pat(config)
     logout()
     print_success("Logged out.")

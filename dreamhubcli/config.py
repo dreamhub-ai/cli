@@ -33,6 +33,15 @@ class DreamhubConfig(BaseModel):
     refresh_token: str | None = Field(default=None)
     tenant_id: str | None = Field(default=None)
 
+    # CLI-managed PAT for transparent fallback after OAuth refresh expiry
+    cli_pat: str | None = Field(default=None)
+    cli_pat_id: str | None = Field(default=None)
+    cli_pat_created_at: str | None = Field(default=None)
+
+    # Self-update version check
+    last_version_check: str | None = Field(default=None)
+    latest_known_version: str | None = Field(default=None)
+
 
 def ensure_config_dir() -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
