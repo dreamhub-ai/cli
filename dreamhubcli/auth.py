@@ -200,7 +200,7 @@ def create_cli_pat(config: DreamhubConfig) -> None:
             logger.debug("Failed to create CLI PAT: %d", response.status_code)
             return
         body = response.json()
-        config.cli_pat = body.get("token") or body.get("clientId")
+        config.cli_pat = body.get("token")
         config.cli_pat_id = body.get("id")
         config.cli_pat_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         save_config(config)
@@ -270,7 +270,7 @@ def rotate_cli_pat_if_needed(config: DreamhubConfig) -> None:
             logger.debug("CLI PAT rotation failed: %d", response.status_code)
             return
         body = response.json()
-        config.cli_pat = body.get("token") or body.get("clientId")
+        config.cli_pat = body.get("token")
         config.cli_pat_id = body.get("id")
         config.cli_pat_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         # If the primary token was the old PAT, promote the new one
@@ -287,7 +287,10 @@ def rotate_cli_pat_if_needed(config: DreamhubConfig) -> None:
         try:
             httpx.delete(
                 old_url,
-                headers={"Authorization": f"Bearer {config.cli_pat}", "x-tenant-id": config.tenant_id or ""},
+                headers={
+                    "Authorization": f"Bearer {config.cli_pat}",
+                    **({"x-tenant-id": config.tenant_id} if config.tenant_id else {}),
+                },
                 timeout=15.0,
             )
         except Exception:
