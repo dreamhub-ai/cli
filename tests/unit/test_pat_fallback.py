@@ -13,13 +13,15 @@ import respx
 from dreamhubcli.auth import (
     create_cli_pat,
     delete_cli_pat,
+    login_with_token,
     logout,
     rotate_cli_pat_if_needed,
 )
+from dreamhubcli.client import DreamhubClient
 from dreamhubcli.config import DEFAULT_API_URL, DreamhubConfig, load_config, save_config
 
 
-def _make_jwt(payload: dict) -> str:
+def _make_jwt(payload: dict[str, int | str]) -> str:
     header = base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode()).rstrip(b"=").decode()
     body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     return f"{header}.{body}.sig"
@@ -130,6 +132,22 @@ class TestDeleteCliPat:
         # Fields should still be cleared locally
         assert config.cli_pat is None
 
+    @respx.mock
+    def test_prefers_cli_pat_for_auth(self, temp_config_dir: Path) -> None:
+        """delete_cli_pat uses cli_pat (not stale JWT) as auth token."""
+        config = DreamhubConfig(
+            token="stale_jwt",
+            tenant_id="t-1",
+            cli_pat="pat_valid",
+            cli_pat_id="pat-id-1",
+            cli_pat_created_at="2026-01-01T00:00:00Z",
+        )
+        save_config(config)
+
+        route = respx.delete(f"{PAT_ENDPOINT}pat-id-1").mock(return_value=httpx.Response(204))
+        delete_cli_pat(config)
+        assert route.calls[0].request.headers["authorization"] == "Bearer pat_valid"
+
 
 class TestRotateCliPat:
     @respx.mock
@@ -176,6 +194,26 @@ class TestRotateCliPat:
         # no-op, should not raise
 
 
+class TestLoginClearsStalePatFields:
+    def test_login_with_token_clears_old_pat(self, temp_config_dir: Path) -> None:
+        """Re-login must not leave a stale PAT from a previous session."""
+        save_config(
+            DreamhubConfig(
+                token="old_jwt",
+                cli_pat="pat_stale_from_prev_session",
+                cli_pat_id="stale-id",
+                cli_pat_created_at="2026-01-01T00:00:00Z",
+            )
+        )
+        config = login_with_token("pat_new_direct_login")
+        assert config.cli_pat is None
+        assert config.cli_pat_id is None
+        assert config.cli_pat_created_at is None
+
+        persisted = load_config()
+        assert persisted.cli_pat is None
+
+
 class TestLogoutClearsPatFields:
     def test_logout_clears_pat(self, temp_config_dir: Path) -> None:
         save_config(
@@ -216,8 +254,6 @@ class TestClientPatFallback:
         # API call with PAT succeeds
         respx.get(f"{DEFAULT_API_URL}/companies").mock(return_value=httpx.Response(200, json={"companies": []}))
 
-        from dreamhubcli.client import DreamhubClient
-
         client = DreamhubClient()
         response = client.get("companies")
 
@@ -246,8 +282,6 @@ class TestClientPatFallback:
             ]
         )
 
-        from dreamhubcli.client import DreamhubClient
-
         client = DreamhubClient()
         response = client.get("companies")
 
@@ -268,8 +302,6 @@ class TestClientPatFallback:
         )
 
         respx.get(f"{DEFAULT_API_URL}/companies").mock(return_value=httpx.Response(401, text="Unauthorized"))
-
-        from dreamhubcli.client import DreamhubClient
 
         client = DreamhubClient()
         response = client.get("companies")

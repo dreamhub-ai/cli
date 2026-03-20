@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import httpx
 import respx
 from typer.testing import CliRunner
 
+from dreamhubcli import __version__
 from dreamhubcli.commands.update import (
     GITHUB_RELEASES_URL,
     _parse_version,
@@ -46,8 +48,6 @@ class TestCheckForUpdateNotice:
     @respx.mock
     def test_no_notice_when_same_version(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig())
-        from dreamhubcli import __version__
-
         respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"}))
         with patch("dreamhubcli.commands.update.print_warning") as mock_warn:
             check_for_update_notice()
@@ -55,8 +55,6 @@ class TestCheckForUpdateNotice:
 
     @respx.mock
     def test_skips_check_within_24h(self, temp_config_dir: Path) -> None:
-        import time
-
         save_config(
             DreamhubConfig(
                 last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -69,8 +67,6 @@ class TestCheckForUpdateNotice:
 
     @respx.mock
     def test_shows_cached_notice_within_24h(self, temp_config_dir: Path) -> None:
-        import time
-
         save_config(
             DreamhubConfig(
                 last_version_check=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -85,8 +81,6 @@ class TestCheckForUpdateNotice:
     @respx.mock
     def test_saves_check_timestamp(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig())
-        from dreamhubcli import __version__
-
         respx.get(GITHUB_RELEASES_URL).mock(return_value=httpx.Response(200, json={"tag_name": f"v{__version__}"}))
         check_for_update_notice()
         config = load_config()
@@ -115,27 +109,50 @@ class TestUpdateCommand:
     @patch("dreamhubcli.commands.update._is_pipx_install", return_value=True)
     @patch("dreamhubcli.commands.update.subprocess.run")
     @patch("dreamhubcli.commands.update.shutil.which", return_value="/usr/local/bin/pipx")
-    def test_pipx_upgrade_success(self, mock_which, mock_run, mock_pipx, mock_check, temp_config_dir: Path) -> None:
+    def test_pipx_upgrade_success(
+        self,
+        mock_which: Mock,
+        mock_run: Mock,
+        mock_pipx: Mock,
+        mock_check: Mock,
+        temp_config_dir: Path,
+    ) -> None:
         mock_run.return_value = type("Result", (), {"returncode": 0, "stdout": "upgraded dreamhubcli", "stderr": ""})()
         result = runner.invoke(app, ["update"])
         assert result.exit_code == 0
         assert "Update complete" in result.output
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0][0] == "/usr/local/bin/pipx"
 
     @patch("dreamhubcli.commands.update.check_for_update_notice")
     @patch("dreamhubcli.commands.update._is_pipx_install", return_value=False)
     @patch("dreamhubcli.commands.update.subprocess.run")
-    @patch("dreamhubcli.commands.update.shutil.which", return_value="/usr/bin/pip")
-    def test_pip_upgrade_success(self, mock_which, mock_run, mock_pipx, mock_check, temp_config_dir: Path) -> None:
+    def test_pip_upgrade_success(
+        self,
+        mock_run: Mock,
+        mock_pipx: Mock,
+        mock_check: Mock,
+        temp_config_dir: Path,
+    ) -> None:
         mock_run.return_value = type("Result", (), {"returncode": 0, "stdout": "installed", "stderr": ""})()
         result = runner.invoke(app, ["update"])
         assert result.exit_code == 0
         assert "Update complete" in result.output
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0][2] == "pip"
 
     @patch("dreamhubcli.commands.update.check_for_update_notice")
     @patch("dreamhubcli.commands.update._is_pipx_install", return_value=True)
     @patch("dreamhubcli.commands.update.subprocess.run")
     @patch("dreamhubcli.commands.update.shutil.which", return_value="/usr/local/bin/pipx")
-    def test_pipx_upgrade_failure(self, mock_which, mock_run, mock_pipx, mock_check, temp_config_dir: Path) -> None:
+    def test_pipx_upgrade_failure(
+        self,
+        mock_which: Mock,
+        mock_run: Mock,
+        mock_pipx: Mock,
+        mock_check: Mock,
+        temp_config_dir: Path,
+    ) -> None:
         mock_run.return_value = type("Result", (), {"returncode": 1, "stdout": "", "stderr": "error"})()
         result = runner.invoke(app, ["update"])
         assert result.exit_code == 1

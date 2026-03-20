@@ -7,6 +7,7 @@ Manages x-tenant-id header alongside authorization.
 from __future__ import annotations
 
 import base64
+import calendar
 import json
 import logging
 import time
@@ -26,6 +27,9 @@ def login_with_token(
     """Store a token (and optional tenant ID / refresh token) in config."""
     config = load_config()
     config.token = token
+    config.cli_pat = None
+    config.cli_pat_id = None
+    config.cli_pat_created_at = None
     if tenant_id is not None:
         config.tenant_id = tenant_id
     config.refresh_token = refresh_token
@@ -211,7 +215,7 @@ def delete_cli_pat(config: DreamhubConfig) -> None:
         return
 
     url = f"{_api_base_url()}{_PAT_ENDPOINT}{config.cli_pat_id}"
-    token = config.token or config.cli_pat
+    token = config.cli_pat or config.token
     if not token:
         return
     headers = {"Authorization": f"Bearer {token}"}
@@ -219,7 +223,9 @@ def delete_cli_pat(config: DreamhubConfig) -> None:
         headers["x-tenant-id"] = config.tenant_id
 
     try:
-        httpx.delete(url, headers=headers, timeout=15.0)
+        response = httpx.delete(url, headers=headers, timeout=15.0)
+        if response.status_code not in (200, 202, 204, 404):
+            logger.debug("CLI PAT deletion returned %d", response.status_code)
     except Exception:
         logger.debug("CLI PAT deletion failed", exc_info=True)
 
@@ -235,7 +241,7 @@ def rotate_cli_pat_if_needed(config: DreamhubConfig) -> None:
         return
 
     try:
-        created = time.mktime(time.strptime(config.cli_pat_created_at, "%Y-%m-%dT%H:%M:%SZ"))
+        created = calendar.timegm(time.strptime(config.cli_pat_created_at, "%Y-%m-%dT%H:%M:%SZ"))
     except (ValueError, OverflowError):
         return
 

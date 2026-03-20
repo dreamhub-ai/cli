@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import logging
 import shutil
 import subprocess
@@ -67,10 +68,6 @@ def update_command() -> None:
             print_error("Update timed out.")
             raise typer.Exit(code=1)
     else:
-        pip_path = shutil.which("pip") or shutil.which("pip3")
-        if not pip_path:
-            print_error("Neither pipx nor pip found. Install manually.")
-            raise typer.Exit(code=1)
         console.print("[dim]Running: pip install --upgrade git+https://github.com/dreamhub-ai/cli.git[/dim]")
         try:
             result = subprocess.run(
@@ -99,7 +96,7 @@ def check_for_update_notice() -> None:
 
     if config.last_version_check:
         try:
-            last_check = time.mktime(time.strptime(config.last_version_check, "%Y-%m-%dT%H:%M:%SZ"))
+            last_check = calendar.timegm(time.strptime(config.last_version_check, "%Y-%m-%dT%H:%M:%SZ"))
             if time.time() - last_check < _VERSION_CHECK_INTERVAL_SECONDS:
                 # Still within the check interval — show cached notice if applicable
                 if config.latest_known_version:
