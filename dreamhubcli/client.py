@@ -10,7 +10,12 @@ import httpx
 import typer
 
 from dreamhubcli import __version__
-from dreamhubcli.auth import get_auth_headers, is_token_expired, refresh_access_token
+from dreamhubcli.auth import (
+    get_auth_headers,
+    is_token_expired,
+    refresh_access_token,
+    rotate_cli_pat_if_needed,
+)
 from dreamhubcli.output import print_error as _print_error
 from dreamhubcli.output import print_warning as _print_warning
 
@@ -54,12 +59,36 @@ class DreamhubClient:
         return f"{self.base_url}/{path.lstrip('/')}"
 
     def _maybe_refresh_proactively(self) -> None:
-        """Refresh the access token if it's expired, before making a request."""
-        from dreamhubcli.config import load_config
+        """Refresh the access token if it's expired, before making a request.
+
+        For PAT-based auth, skips JWT refresh and checks PAT rotation instead.
+        If JWT refresh fails and a CLI PAT exists, promotes the PAT to primary token.
+        """
+        from dreamhubcli.config import load_config, save_config
 
         config = load_config()
-        if config.token and config.refresh_token and is_token_expired(config.token):
-            refresh_access_token()
+        if not config.token:
+            return
+
+        # PAT is the primary token — just check rotation
+        if config.token.startswith("pat_"):
+            rotate_cli_pat_if_needed(config)
+            return
+
+        # JWT not expired — nothing to do
+        if not is_token_expired(config.token):
+            return
+
+        # Try JWT refresh first
+        if config.refresh_token and refresh_access_token():
+            return
+
+        # JWT refresh failed or unavailable — fall back to CLI PAT
+        if config.cli_pat:
+            logger.debug("JWT refresh failed, promoting CLI PAT to primary token")
+            config.token = config.cli_pat
+            config.refresh_token = None
+            save_config(config)
 
     def request(
         self,
@@ -101,13 +130,26 @@ class DreamhubClient:
         # to avoid duplicating side effects on POST/PATCH/DELETE.
         _extra_header_names = {k.lower() for k in (extra_headers or {})}
         _is_idempotent = method.upper() in _IDEMPOTENT_METHODS or "idempotency-key" in _extra_header_names
-        if response.status_code == 401 and _is_idempotent and refresh_access_token():
-            request_kwargs["headers"] = self._build_headers(extra_headers)
-            try:
-                with httpx.Client(timeout=self.timeout) as http:
-                    response = http.request(**request_kwargs)
-            except httpx.RequestError:
-                pass
+        if response.status_code == 401 and _is_idempotent:
+            refreshed = refresh_access_token()
+            if not refreshed:
+                # JWT refresh failed — try CLI PAT fallback
+                from dreamhubcli.config import load_config, save_config
+
+                config = load_config()
+                if config.cli_pat and config.token != config.cli_pat:
+                    logger.debug("401 handler: promoting CLI PAT to primary token")
+                    config.token = config.cli_pat
+                    config.refresh_token = None
+                    save_config(config)
+                    refreshed = True
+            if refreshed:
+                request_kwargs["headers"] = self._build_headers(extra_headers)
+                try:
+                    with httpx.Client(timeout=self.timeout) as http:
+                        response = http.request(**request_kwargs)
+                except httpx.RequestError:
+                    pass
 
         # 429 retry with linear backoff (max 3 retries)
         if response.status_code == 429:

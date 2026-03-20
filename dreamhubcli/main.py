@@ -32,6 +32,7 @@ from dreamhubcli.commands import (
     search,
     settings,
     tasks,
+    update,
     users,
 )
 from dreamhubcli.config import is_dev_environment
@@ -70,6 +71,11 @@ def main_callback(
     """Dreamhub CLI — unified command-line interface for all Dreamhub APIs."""
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
+
+    from dreamhubcli.commands.update import check_for_update_notice
+
+    check_for_update_notice()
+
     if ctx.invoked_subcommand is None:
         pass
 
@@ -95,6 +101,11 @@ app.command(
 )(search.search_command)
 app.add_typer(reporting.app)
 app.add_typer(mcp.app)
+app.command(
+    name="update",
+    help="Update Dreamhub CLI to the latest version.",
+    epilog="\b\nExamples:\n  dh update",
+)(update.update_command)
 
 # Dev/QA only commands — hidden in production
 if is_dev_environment():

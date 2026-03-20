@@ -47,6 +47,9 @@ def logout() -> DreamhubConfig:
     config.token = None
     config.refresh_token = None
     config.tenant_id = None
+    config.cli_pat = None
+    config.cli_pat_id = None
+    config.cli_pat_created_at = None
     save_config(config)
     return config
 
@@ -146,3 +149,141 @@ def refresh_access_token() -> bool:
     save_config(config)
     logger.debug("Access token refreshed successfully")
     return True
+
+
+# ---------------------------------------------------------------------------
+# CLI-managed PAT (transparent fallback)
+# ---------------------------------------------------------------------------
+
+_PAT_ENDPOINT = "/accessenabler/tokens/"
+_PAT_EXPIRY_DAYS = 14
+_PAT_ROTATION_THRESHOLD_DAYS = 12
+
+
+def _api_base_url() -> str:
+    from dreamhubcli.config import DEFAULT_API_URL
+
+    return DEFAULT_API_URL.rstrip("/")
+
+
+def create_cli_pat(config: DreamhubConfig) -> None:
+    """Create a 14-day CLI-managed PAT after browser login.
+
+    Non-fatal: failures are logged and swallowed.
+    Skipped if the current token is already a PAT.
+    """
+    if config.token and config.token.startswith("pat_"):
+        return
+    if not config.token:
+        return
+
+    url = f"{_api_base_url()}{_PAT_ENDPOINT}"
+    headers = {
+        "Authorization": f"Bearer {config.token}",
+        "Content-Type": "application/json",
+    }
+    if config.tenant_id:
+        headers["x-tenant-id"] = config.tenant_id
+
+    try:
+        response = httpx.post(
+            url,
+            json={"name": "cli-session", "expiresInDays": _PAT_EXPIRY_DAYS},
+            headers=headers,
+            timeout=15.0,
+        )
+        if response.status_code not in (200, 201):
+            logger.debug("Failed to create CLI PAT: %d", response.status_code)
+            return
+        body = response.json()
+        config.cli_pat = body.get("token") or body.get("clientId")
+        config.cli_pat_id = body.get("id")
+        config.cli_pat_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        save_config(config)
+        logger.debug("CLI PAT created: %s", config.cli_pat_id)
+    except Exception:
+        logger.debug("CLI PAT creation failed", exc_info=True)
+
+
+def delete_cli_pat(config: DreamhubConfig) -> None:
+    """Delete the CLI-managed PAT. Best-effort, never raises."""
+    if not config.cli_pat_id:
+        return
+
+    url = f"{_api_base_url()}{_PAT_ENDPOINT}{config.cli_pat_id}"
+    token = config.token or config.cli_pat
+    if not token:
+        return
+    headers = {"Authorization": f"Bearer {token}"}
+    if config.tenant_id:
+        headers["x-tenant-id"] = config.tenant_id
+
+    try:
+        httpx.delete(url, headers=headers, timeout=15.0)
+    except Exception:
+        logger.debug("CLI PAT deletion failed", exc_info=True)
+
+    config.cli_pat = None
+    config.cli_pat_id = None
+    config.cli_pat_created_at = None
+    save_config(config)
+
+
+def rotate_cli_pat_if_needed(config: DreamhubConfig) -> None:
+    """Rotate the CLI PAT if it's older than 12 days. Non-fatal."""
+    if not config.cli_pat or not config.cli_pat_created_at:
+        return
+
+    try:
+        created = time.mktime(time.strptime(config.cli_pat_created_at, "%Y-%m-%dT%H:%M:%SZ"))
+    except (ValueError, OverflowError):
+        return
+
+    age_days = (time.time() - created) / 86400
+    if age_days < _PAT_ROTATION_THRESHOLD_DAYS:
+        return
+
+    old_pat_id = config.cli_pat_id
+    auth_token = config.cli_pat
+    url = f"{_api_base_url()}{_PAT_ENDPOINT}"
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "Content-Type": "application/json",
+    }
+    if config.tenant_id:
+        headers["x-tenant-id"] = config.tenant_id
+
+    try:
+        response = httpx.post(
+            url,
+            json={"name": "cli-session", "expiresInDays": _PAT_EXPIRY_DAYS},
+            headers=headers,
+            timeout=15.0,
+        )
+        if response.status_code not in (200, 201):
+            logger.debug("CLI PAT rotation failed: %d", response.status_code)
+            return
+        body = response.json()
+        config.cli_pat = body.get("token") or body.get("clientId")
+        config.cli_pat_id = body.get("id")
+        config.cli_pat_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        # If the primary token was the old PAT, promote the new one
+        if config.token == auth_token:
+            config.token = config.cli_pat
+        save_config(config)
+    except Exception:
+        logger.debug("CLI PAT rotation failed", exc_info=True)
+        return
+
+    # Clean up old PAT
+    if old_pat_id and config.cli_pat_id != old_pat_id:
+        old_url = f"{_api_base_url()}{_PAT_ENDPOINT}{old_pat_id}"
+        try:
+            httpx.delete(
+                old_url,
+                headers={"Authorization": f"Bearer {config.cli_pat}", "x-tenant-id": config.tenant_id or ""},
+                timeout=15.0,
+            )
+        except Exception:
+            logger.debug("Old CLI PAT cleanup failed", exc_info=True)
+        logger.debug("CLI PAT rotated: %s -> %s", old_pat_id, config.cli_pat_id)
