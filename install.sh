@@ -17,8 +17,9 @@ command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 version_ge() {
   # Returns 0 if $1 >= $2 (semver major.minor comparison)
-  local IFS=.
-  local i a=($1) b=($2)
+  local i a b
+  IFS=. read -ra a <<< "$1"
+  IFS=. read -ra b <<< "$2"
   for ((i=0; i<${#b[@]}; i++)); do
     [[ ${a[i]:-0} -gt ${b[i]:-0} ]] && return 0
     [[ ${a[i]:-0} -lt ${b[i]:-0} ]] && return 1

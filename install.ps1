@@ -20,10 +20,12 @@ function Find-Python {
                 if ($ver -and [version]$ver -ge $MinPython) {
                     return $bin.Source
                 }
-            } catch {}
+            } catch {
+                Write-Verbose "Python probe failed for ${candidate}: $_"
+            }
         }
     }
-    # Check py launcher with version flag
+    # py -3 explicitly requests Python 3, whereas bare py may default to Python 2
     $py = Get-Command "py" -ErrorAction SilentlyContinue
     if ($py) {
         try {
@@ -31,7 +33,9 @@ function Find-Python {
             if ($ver -and [version]$ver -ge $MinPython) {
                 return "py -3"
             }
-        } catch {}
+        } catch {
+            Write-Verbose "py -3 probe failed: $_"
+        }
     }
     return $null
 }
@@ -81,11 +85,11 @@ if ($pythonBin) {
 
 # Helper to invoke python consistently
 function Invoke-Python {
-    param([string[]]$Args)
+    param([string[]]$PythonArgs)
     if ($pythonBin -eq "py -3") {
-        & py -3 @Args
+        & py -3 @PythonArgs
     } else {
-        & $pythonBin @Args
+        & $pythonBin @PythonArgs
     }
 }
 
