@@ -6,6 +6,15 @@ Manage companies, deals, leads, people, and more directly from your terminal.
 
 ## Install
 
+One command — handles everything (Python, pipx, CLI):
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash
+```
+
+<details>
+<summary>Manual install (if you already have pipx)</summary>
+
 ```shell
 pipx install git+https://github.com/dreamhub-ai/cli.git
 ```
@@ -15,6 +24,7 @@ Or with pip:
 ```shell
 pip install git+https://github.com/dreamhub-ai/cli.git
 ```
+</details>
 
 ## Login
 
