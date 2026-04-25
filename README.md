@@ -8,8 +8,14 @@ Manage companies, deals, leads, people, and more directly from your terminal.
 
 One command — handles everything (Python, pipx, CLI):
 
+**macOS / Linux:**
 ```shell
 curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash
+```
+
+**Windows** (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.ps1 | iex
 ```
 
 <details>
