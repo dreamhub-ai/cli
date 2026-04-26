@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Dreamhub CLI installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash
+# With MCP: curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash -s -- --mcp
 set -euo pipefail
 
 REPO="https://github.com/dreamhub-ai/cli.git"
 MIN_PYTHON="3.11"
+INSTALL_MCP=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --mcp) INSTALL_MCP=true ;;
+  esac
+done
 
 # --- Helpers ---
 
@@ -14,6 +22,38 @@ warn()  { printf '\033[1;33m==>\033[0m %s\n' "$*"; }
 fail()  { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+install_mcp() {
+  local dh_path config_path config_dir
+  dh_path="$(command -v dh 2>/dev/null || echo "dh")"
+
+  case "$OS" in
+    Darwin) config_path="$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
+    Linux)  config_path="$HOME/.config/Claude/claude_desktop_config.json" ;;
+    *)      config_path="$HOME/.claude/claude_desktop_config.json" ;;
+  esac
+
+  config_dir="$(dirname "$config_path")"
+  mkdir -p "$config_dir"
+
+  # Read existing config or start fresh
+  local existing="{}"
+  if [[ -f "$config_path" ]]; then
+    existing=$(cat "$config_path")
+  fi
+
+  # Merge dreamhub server into mcpServers using Python (already available)
+  "$PYTHON_BIN" -c "
+import json, sys
+config = json.loads(sys.argv[1])
+servers = config.setdefault('mcpServers', {})
+servers['dreamhub'] = {'command': sys.argv[2], 'args': ['mcp', 'serve']}
+print(json.dumps(config, indent=2))
+" "$existing" "$dh_path" > "$config_path"
+
+  ok "Claude Desktop MCP configured ($config_path)"
+  info "Using binary: $dh_path"
+}
 
 version_ge() {
   # Returns 0 if $1 >= $2 (semver major.minor comparison)
@@ -60,8 +100,22 @@ else
 
   if [[ "$OS" == "Darwin" ]]; then
     if ! command_exists brew; then
-      info "Homebrew not found. Installing Homebrew first..."
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      info "Homebrew not found. Installing Homebrew first (may ask for your password)..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
+        echo ""
+        fail "Homebrew installation failed. You may need admin privileges.
+
+  Ask your IT admin to run this for you, or install Python manually:
+
+  Option A -- Install Homebrew (requires admin password):
+    /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"
+    brew install python@3.12
+    Then re-run this installer.
+
+  Option B -- Download Python directly:
+    Visit https://www.python.org/downloads/ and install Python 3.12+
+    Then re-run this installer."
+      }
 
       # Add brew to PATH for this session (Apple Silicon vs Intel)
       if [[ -f /opt/homebrew/bin/brew ]]; then
@@ -127,12 +181,25 @@ pipx install "git+${REPO}" --force --python "$PYTHON_BIN"
 if command_exists dh; then
   echo ""
   ok "Dreamhub CLI installed successfully!"
-  echo ""
-  echo "  Get started:"
-  echo "    dh auth login       Log in to your account"
-  echo "    dh mcp install      Set up Claude Desktop integration"
-  echo "    dh --help           See all commands"
-  echo ""
+
+  # Step 5: MCP install (if requested)
+  if [[ "$INSTALL_MCP" == "true" ]]; then
+    echo ""
+    install_mcp
+    echo ""
+    echo "  Get started:"
+    echo "    dh auth login       Log in to your account"
+    echo "    Restart Claude Desktop to activate the MCP server"
+    echo "    dh --help           See all commands"
+    echo ""
+  else
+    echo ""
+    echo "  Get started:"
+    echo "    dh auth login       Log in to your account"
+    echo "    dh mcp install      Set up Claude Desktop integration"
+    echo "    dh --help           See all commands"
+    echo ""
+  fi
 else
   echo ""
   warn "Installation completed but 'dh' is not on your PATH."
