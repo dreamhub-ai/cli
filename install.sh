@@ -115,7 +115,11 @@ else
 
   if [[ "$OS" == "Darwin" ]]; then
     if ! command_exists brew; then
-      info "Homebrew not found. Installing Homebrew first (may ask for your password)..."
+      info "Homebrew not found. Installing Homebrew first..."
+      # When piped via curl|bash, stdin is the pipe — sudo can't read the password.
+      # Prompt upfront via /dev/tty so Homebrew's sudo calls succeed.
+      info "Homebrew needs admin access. Enter your password:"
+      sudo -v < /dev/tty 2>/dev/null || true
       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
         echo ""
         fail "Homebrew installation failed. You may need admin privileges.
