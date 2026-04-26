@@ -119,7 +119,9 @@ else
       # When piped via curl|bash, stdin is the pipe — sudo can't read the password.
       # Prompt upfront via /dev/tty so Homebrew's sudo calls succeed.
       info "Homebrew needs admin access. Enter your password:"
-      sudo -v < /dev/tty 2>/dev/null || true
+      if ! sudo -v < /dev/tty; then
+        fail "Unable to acquire admin credentials. Re-run the installer and enter your password when prompted."
+      fi
       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
         echo ""
         fail "Homebrew installation failed. You may need admin privileges.
