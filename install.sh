@@ -115,7 +115,13 @@ else
 
   if [[ "$OS" == "Darwin" ]]; then
     if ! command_exists brew; then
-      info "Homebrew not found. Installing Homebrew first (may ask for your password)..."
+      info "Homebrew not found. Installing Homebrew first..."
+      # When piped via curl|bash, stdin is the pipe — sudo can't read the password.
+      # Prompt upfront via /dev/tty so Homebrew's sudo calls succeed.
+      info "Homebrew needs admin access. Enter your password:"
+      if ! sudo -v < /dev/tty; then
+        fail "Unable to acquire admin credentials. Re-run the installer and enter your password when prompted."
+      fi
       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
         echo ""
         fail "Homebrew installation failed. You may need admin privileges.
@@ -141,6 +147,9 @@ else
     fi
     brew install python@3.12
   elif [[ "$OS" == "Linux" ]]; then
+    # Acquire sudo upfront (stdin may be a pipe from curl|bash)
+    info "Package install needs admin access. Enter your password:"
+    sudo -v < /dev/tty 2>/dev/null || true
     if command_exists apt-get; then
       sudo apt-get update -qq
       sudo apt-get install -y -qq python3 python3-pip python3-venv
