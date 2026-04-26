@@ -28,7 +28,7 @@ install_mcp() {
   dh_path="$(command -v dh 2>/dev/null)" || {
     warn "Could not configure MCP: 'dh' not found in PATH."
     echo "  Reload your shell and run: dh mcp install"
-    return 0
+    return 1
   }
 
   case "$OS" in
@@ -47,7 +47,7 @@ install_mcp() {
   fi
 
   # Write to temp file first, then atomically move into place
-  tmp_config="$(mktemp)"
+  tmp_config="$(mktemp "${config_dir}/claude_desktop_config.json.tmp.XXXXXX")"
   if ! "$PYTHON_BIN" -c "
 import json, sys
 try:
@@ -61,7 +61,10 @@ print(json.dumps(config, indent=2))
     rm -f "$tmp_config"
     fail "Failed to generate MCP config"
   fi
-  mv "$tmp_config" "$config_path"
+  if ! mv "$tmp_config" "$config_path"; then
+    rm -f "$tmp_config"
+    fail "Failed to write MCP config"
+  fi
 
   ok "Claude Desktop MCP configured ($config_path)"
   info "Using binary: $dh_path"
@@ -197,13 +200,21 @@ if command_exists dh; then
   # Step 5: MCP install (if requested)
   if [[ "$INSTALL_MCP" == "true" ]]; then
     echo ""
-    install_mcp
-    echo ""
-    echo "  Get started:"
-    echo "    dh auth login       Log in to your account"
-    echo "    Restart Claude Desktop to activate the MCP server"
-    echo "    dh --help           See all commands"
-    echo ""
+    if install_mcp; then
+      echo ""
+      echo "  Get started:"
+      echo "    dh auth login       Log in to your account"
+      echo "    Restart Claude Desktop to activate the MCP server"
+      echo "    dh --help           See all commands"
+      echo ""
+    else
+      echo ""
+      echo "  Get started:"
+      echo "    dh auth login       Log in to your account"
+      echo "    dh mcp install      Set up Claude Desktop integration (after reloading shell)"
+      echo "    dh --help           See all commands"
+      echo ""
+    fi
   else
     echo ""
     echo "  Get started:"

@@ -14,6 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | b
 ```
 
 **macOS / Linux + Claude Desktop MCP:**
+
 ```shell
 curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash -s -- --mcp
 ```
