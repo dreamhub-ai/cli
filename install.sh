@@ -48,15 +48,20 @@ install_mcp() {
 
   # Write to temp file first, then atomically move into place
   tmp_config="$(mktemp)"
-  "$PYTHON_BIN" -c "
+  if ! "$PYTHON_BIN" -c "
 import json, sys
-config = json.loads(sys.argv[1])
+try:
+    config = json.loads(sys.argv[1])
+except (json.JSONDecodeError, ValueError):
+    config = {}
 servers = config.setdefault('mcpServers', {})
 servers['dreamhub'] = {'command': sys.argv[2], 'args': ['mcp', 'serve']}
 print(json.dumps(config, indent=2))
-" "$existing" "$dh_path" > "$tmp_config" \
-    && mv "$tmp_config" "$config_path" \
-    || { rm -f "$tmp_config"; fail "Failed to write MCP config"; }
+" "$existing" "$dh_path" > "$tmp_config"; then
+    rm -f "$tmp_config"
+    fail "Failed to generate MCP config"
+  fi
+  mv "$tmp_config" "$config_path"
 
   ok "Claude Desktop MCP configured ($config_path)"
   info "Using binary: $dh_path"
