@@ -145,6 +145,9 @@ else
     fi
     brew install python@3.12
   elif [[ "$OS" == "Linux" ]]; then
+    # Acquire sudo upfront (stdin may be a pipe from curl|bash)
+    info "Package install needs admin access. Enter your password:"
+    sudo -v < /dev/tty 2>/dev/null || true
     if command_exists apt-get; then
       sudo apt-get update -qq
       sudo apt-get install -y -qq python3 python3-pip python3-venv
