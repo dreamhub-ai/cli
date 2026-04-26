@@ -13,6 +13,11 @@ One command — handles everything (Python, pipx, CLI):
 curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash
 ```
 
+**macOS / Linux + Claude Desktop MCP:**
+```shell
+curl -fsSL https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.sh | bash -s -- --mcp
+```
+
 **Windows** (PowerShell):
 ```powershell
 irm https://raw.githubusercontent.com/dreamhub-ai/cli/main/install.ps1 | iex

@@ -24,8 +24,12 @@ fail()  { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 install_mcp() {
-  local dh_path config_path config_dir
-  dh_path="$(command -v dh 2>/dev/null || echo "dh")"
+  local dh_path config_path config_dir tmp_config
+  dh_path="$(command -v dh 2>/dev/null)" || {
+    warn "Could not configure MCP: 'dh' not found in PATH."
+    echo "  Reload your shell and run: dh mcp install"
+    return 0
+  }
 
   case "$OS" in
     Darwin) config_path="$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
@@ -42,14 +46,17 @@ install_mcp() {
     existing=$(cat "$config_path")
   fi
 
-  # Merge dreamhub server into mcpServers using Python (already available)
+  # Write to temp file first, then atomically move into place
+  tmp_config="$(mktemp)"
   "$PYTHON_BIN" -c "
 import json, sys
 config = json.loads(sys.argv[1])
 servers = config.setdefault('mcpServers', {})
 servers['dreamhub'] = {'command': sys.argv[2], 'args': ['mcp', 'serve']}
 print(json.dumps(config, indent=2))
-" "$existing" "$dh_path" > "$config_path"
+" "$existing" "$dh_path" > "$tmp_config" \
+    && mv "$tmp_config" "$config_path" \
+    || { rm -f "$tmp_config"; fail "Failed to write MCP config"; }
 
   ok "Claude Desktop MCP configured ($config_path)"
   info "Using binary: $dh_path"
