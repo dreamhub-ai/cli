@@ -201,44 +201,61 @@ fi
 info "Installing Dreamhub CLI..."
 pipx install "git+${REPO}" --force --python "$PYTHON_BIN"
 
-# Step 4: Verify
-if command_exists dh; then
-  echo ""
-  ok "Dreamhub CLI installed successfully!"
+# Step 4: Ensure dh is reachable for this session
+NEEDED_PATH_FIX=false
+if ! command_exists dh; then
+  # pipx installs binaries to ~/.local/bin — add it for this session so MCP setup can proceed
+  export PATH="$HOME/.local/bin:$PATH"
+  NEEDED_PATH_FIX=true
+fi
 
-  # Step 5: MCP install (if requested)
-  if [[ "$INSTALL_MCP" == "true" ]]; then
-    echo ""
-    if install_mcp; then
-      echo ""
-      echo "  Get started:"
-      echo "    dh auth login       Log in to your account"
-      echo "    Restart Claude Desktop to activate the MCP server"
-      echo "    dh --help           See all commands"
-      echo ""
-    else
-      echo ""
-      echo "  Get started:"
-      echo "    dh auth login       Log in to your account"
-      echo "    dh mcp install      Set up Claude Desktop integration (after reloading shell)"
-      echo "    dh --help           See all commands"
-      echo ""
-    fi
-  else
-    echo ""
-    echo "  Get started:"
-    echo "    dh auth login       Log in to your account"
-    echo "    dh mcp install      Set up Claude Desktop integration"
-    echo "    dh --help           See all commands"
-    echo ""
-  fi
-else
+if ! command_exists dh; then
   echo ""
-  warn "Installation completed but 'dh' is not on your PATH."
+  warn "Installation completed but 'dh' could not be found."
   echo ""
   echo "  Add this to your shell profile (~/.zshrc or ~/.bashrc):"
   echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
   echo ""
   echo "  Then restart your terminal and run: dh --help"
+  if [[ "$INSTALL_MCP" == "true" ]]; then
+    echo "  To finish MCP setup, run: dh mcp install"
+  fi
   echo ""
+  exit 0
 fi
+
+echo ""
+ok "Dreamhub CLI installed successfully!"
+
+# Step 5: MCP install (if requested)
+if [[ "$INSTALL_MCP" == "true" ]]; then
+  echo ""
+  if install_mcp; then
+    echo ""
+    echo "  Get started:"
+    echo "    dh auth login       Log in to your account"
+    echo "    Restart Claude Desktop to activate the MCP server"
+    echo "    dh --help           See all commands"
+  else
+    echo ""
+    echo "  Get started:"
+    echo "    dh auth login       Log in to your account"
+    echo "    dh mcp install      Set up Claude Desktop integration (after reloading shell)"
+    echo "    dh --help           See all commands"
+  fi
+else
+  echo ""
+  echo "  Get started:"
+  echo "    dh auth login       Log in to your account"
+  echo "    dh mcp install      Set up Claude Desktop integration"
+  echo "    dh --help           See all commands"
+fi
+
+if [[ "$NEEDED_PATH_FIX" == "true" ]]; then
+  echo ""
+  warn "'dh' is not on your permanent PATH."
+  echo "  Add this to your shell profile (~/.zshrc or ~/.bashrc):"
+  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "  Then restart your terminal."
+fi
+echo ""
