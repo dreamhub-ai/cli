@@ -122,8 +122,7 @@ def login() -> dict:
             return {
                 "authenticated": False,
                 "message": (
-                    f"Port {CALLBACK_PORT} is in use. "
-                    "Ask the user to close the other process, then try again."
+                    f"Port {CALLBACK_PORT} is in use. " "Ask the user to close the other process, then try again."
                 ),
             }
 
