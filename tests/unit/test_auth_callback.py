@@ -141,7 +141,7 @@ class TestCallbackHandler:
 
             assert len(response_holder) == 1
             assert response_holder[0].status_code == 200
-            assert "Logged In to Dreamhub CLI" in response_holder[0].text
+            assert "You're all set!" in response_holder[0].text
 
     def test_callback_handler_ignores_non_callback_path(self) -> None:
         """GET to a path other than /callback returns 404."""

@@ -228,34 +228,41 @@ echo ""
 ok "Dreamhub CLI installed successfully!"
 
 # Step 5: MCP install (if requested)
+MCP_OK=false
 if [[ "$INSTALL_MCP" == "true" ]]; then
   echo ""
-  if install_mcp; then
-    echo ""
-    echo "  Get started:"
-    echo "    dh auth login       Log in to your account"
-    echo "    Restart Claude Desktop to activate the MCP server"
-    echo "    dh --help           See all commands"
-  else
-    echo ""
-    echo "  Get started:"
-    echo "    dh auth login       Log in to your account"
-    echo "    dh mcp install      Set up Claude Desktop integration (after reloading shell)"
-    echo "    dh --help           See all commands"
-  fi
-else
-  echo ""
-  echo "  Get started:"
-  echo "    dh auth login       Log in to your account"
-  echo "    dh mcp install      Set up Claude Desktop integration"
-  echo "    dh --help           See all commands"
+  install_mcp && MCP_OK=true
 fi
 
+# Step 6: Single unified "next steps" block — always the last thing on screen
+echo ""
+STEP=1
+
 if [[ "$NEEDED_PATH_FIX" == "true" ]]; then
-  echo ""
-  warn "'dh' is not on your permanent PATH."
-  echo "  Add this to your shell profile (~/.zshrc or ~/.bashrc):"
-  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
-  echo "  Then restart your terminal."
+  ok "Next steps:"
+  echo "    ${STEP}. Run:  pipx ensurepath"
+  STEP=$((STEP + 1))
+  echo "    ${STEP}. Restart your terminal"
+  STEP=$((STEP + 1))
+else
+  ok "Next steps:"
 fi
+
+echo "    ${STEP}. Run:  dh auth login"
+STEP=$((STEP + 1))
+
+if [[ "$INSTALL_MCP" == "true" && "$MCP_OK" == "false" ]]; then
+  echo "    ${STEP}. Run:  dh mcp install"
+  STEP=$((STEP + 1))
+fi
+
+if [[ "$INSTALL_MCP" == "true" ]]; then
+  echo "    ${STEP}. Restart Claude Desktop"
+  STEP=$((STEP + 1))
+else
+  echo "    ${STEP}. Run:  dh mcp install      (optional: Claude Desktop integration)"
+fi
+
+echo ""
+echo "    dh --help           See all commands"
 echo ""
