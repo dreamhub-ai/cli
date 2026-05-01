@@ -12,7 +12,7 @@ import httpx
 from fastmcp import FastMCP
 from mcp.types import Icon
 
-from dreamhubcli.auth import create_cli_pat, is_authenticated, is_token_expired, login_with_token
+from dreamhubcli.auth import create_cli_pat, is_token_expired, login_with_token
 from dreamhubcli.auth_callback import (
     CALLBACK_PORT,
     _build_auth_url,
@@ -126,10 +126,21 @@ def login() -> dict:
         auth_url = _build_auth_url(challenge, state)
 
         received = threading.Event()
-        webbrowser.open(auth_url)
+        callback_result: dict[str, str | None] = {"auth_code": None, "returned_state": None}
 
-        # Block until callback arrives or timeout (no Rich console output -- safe for stdio)
-        auth_code, returned_state = _run_callback_server(received)
+        def _wait_for_callback() -> None:
+            auth_code, returned_state = _run_callback_server(received)
+            callback_result["auth_code"] = auth_code
+            callback_result["returned_state"] = returned_state
+
+        # Start listener before opening browser to avoid race where redirect arrives first
+        callback_thread = threading.Thread(target=_wait_for_callback, daemon=True)
+        callback_thread.start()
+        webbrowser.open(auth_url)
+        callback_thread.join()
+
+        auth_code = callback_result["auth_code"]
+        returned_state = callback_result["returned_state"]
 
         if auth_code is None:
             return {
