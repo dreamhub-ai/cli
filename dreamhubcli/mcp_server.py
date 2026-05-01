@@ -3,14 +3,26 @@
 from __future__ import annotations
 
 import logging
+import secrets
+import threading
+import webbrowser
 from typing import Any
 
 import httpx
 from fastmcp import FastMCP
 from mcp.types import Icon
 
-from dreamhubcli.auth import is_authenticated, login_with_token
+from dreamhubcli.auth import create_cli_pat, is_authenticated, is_token_expired, login_with_token
+from dreamhubcli.auth_callback import (
+    CALLBACK_PORT,
+    _build_auth_url,
+    _exchange_code,
+    _generate_pkce,
+    _port_is_free,
+    _run_callback_server,
+)
 from dreamhubcli.client import DreamhubClient
+from dreamhubcli.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +72,9 @@ mcp = FastMCP(
     "dreamhub",
     instructions=(
         "Dreamhub CRM tools. "
-        "IMPORTANT: Before using any other tool, call check_auth_status first. "
-        "If it returns authenticated=false, tell the user you need to connect their "
-        "Dreamhub account first, then call login to open the browser login page. "
-        "Wait for login to complete before proceeding with their request."
+        "If a tool returns an authentication error, call check_auth_status to diagnose, "
+        "then call login to open the browser login page if needed. "
+        "Wait for login to complete before retrying the original request."
     ),
     icons=[Icon(src=_ICON_DATA_URI, mimeType="image/svg+xml")],
 )
@@ -80,33 +91,27 @@ mcp = FastMCP(
 @mcp.tool()
 def check_auth_status() -> dict:
     """Check if the user is logged in to Dreamhub. Call this before any other tool."""
-    authenticated = is_authenticated()
-    if authenticated:
-        return {"authenticated": True}
-    return {
-        "authenticated": False,
-        "message": "Not logged in. Call the login tool to open the browser login page.",
-    }
+    config = load_config()
+    if config.token is None:
+        return {
+            "authenticated": False,
+            "message": "Not logged in. Call the login tool to open the browser login page.",
+        }
+    if is_token_expired(config.token):
+        return {
+            "authenticated": False,
+            "message": "Session expired. Call the login tool to re-authenticate.",
+        }
+    return {"authenticated": True, "message": None}
 
 
 @mcp.tool()
 def login() -> dict:
     """Open the browser for Dreamhub login. Returns once login completes or times out."""
-    if is_authenticated():
+    config = load_config()
+    if config.token is not None and not is_token_expired(config.token):
         return {"authenticated": True, "message": "Already logged in."}
     try:
-        from dreamhubcli.auth_callback import (
-            _build_auth_url,
-            _exchange_code,
-            _generate_pkce,
-            _port_is_free,
-            _run_callback_server,
-            CALLBACK_PORT,
-        )
-        import secrets
-        import threading
-        import webbrowser
-
         if not _port_is_free(CALLBACK_PORT):
             return {
                 "authenticated": False,
@@ -138,13 +143,16 @@ def login() -> dict:
             }
 
         access_token, refresh_token, tenant_id = _exchange_code(auth_code, verifier)
-        login_with_token(access_token, tenant_id, refresh_token=refresh_token)
+        updated_config = login_with_token(access_token, tenant_id, refresh_token=refresh_token)
+        create_cli_pat(updated_config)
         return {"authenticated": True, "message": "Login successful."}
-    except Exception as exc:
-        logger.debug("MCP login failed", exc_info=True)
+    except BaseException as exc:
+        logger.exception("MCP login failed")
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
         return {
             "authenticated": False,
-            "message": f"Login failed: {exc}. The user can also run 'dh auth login' in a terminal.",
+            "message": "Login failed. Run 'dh auth login' in a terminal to try again.",
         }
 
 
