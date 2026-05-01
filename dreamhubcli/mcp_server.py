@@ -220,7 +220,8 @@ CRUD_ENTITIES = {
 
 
 def _client() -> DreamhubClient:
-    if not is_authenticated():
+    config = load_config()
+    if config.token is None or is_token_expired(config.token):
         raise RuntimeError("Not logged in. Run `dh auth login` first.")
     return DreamhubClient()
 
