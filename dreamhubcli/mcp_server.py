@@ -90,7 +90,13 @@ mcp = FastMCP(
 
 @mcp.tool()
 def check_auth_status() -> dict:
-    """Check if the user is logged in to Dreamhub. Call this before any other tool."""
+    """Check if the user is logged in to Dreamhub.
+
+    Call this when a tool returns an authentication or authorization error to
+    diagnose whether the session is missing or expired. Returns a dict with
+    ``authenticated`` (bool) and ``message`` (str | None). If not authenticated,
+    call ``login`` to open the browser login page.
+    """
     config = load_config()
     if config.token is None:
         return {
