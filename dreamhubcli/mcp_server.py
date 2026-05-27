@@ -217,7 +217,7 @@ def update_cli() -> dict:
         detail = output or "unknown error"
         return {
             "updated": False,
-            "message": f"Update failed: {detail}. Run 'pipx upgrade dreamhubcli' manually for details.",
+            "message": f"Update failed: {detail}. Run 'pipx upgrade dreamhubcli' manually.",
         }
 
     already_latest = "already up-to-date" in output.lower() or "already at latest" in output.lower()
