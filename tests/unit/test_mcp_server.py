@@ -579,9 +579,7 @@ class TestUpdateCli:
         import subprocess
 
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/pipx" if "pipx" in name else None)
-        result = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="upgraded package dreamhubcli", stderr=""
-        )
+        result = subprocess.CompletedProcess(args=[], returncode=0, stdout="upgraded package dreamhubcli", stderr="")
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: result)
 
         fn = _get_tool_fn("update_cli")
@@ -673,9 +671,7 @@ class TestClientCliPatFallback:
         import respx as respx_mod
 
         with respx_mod.mock:
-            respx_mod.post("https://auth.dreamhub.ai/oauth/token").mock(
-                return_value=httpx.Response(401)
-            )
+            respx_mod.post("https://auth.dreamhub.ai/oauth/token").mock(return_value=httpx.Response(401))
             from dreamhubcli import mcp_server
 
             mcp_server._refresh_token_or_promote_pat()
@@ -686,9 +682,7 @@ class TestClientCliPatFallback:
         assert config.token == cli_pat
         assert config.refresh_token is None
 
-    def test_client_raises_when_no_valid_token(
-        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_client_raises_when_no_valid_token(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from dreamhubcli.config import DreamhubConfig, save_config
 
         save_config(DreamhubConfig(token=None, tenant_id="t-1"))
