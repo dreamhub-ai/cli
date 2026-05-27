@@ -97,6 +97,7 @@ def check_auth_status() -> dict:
     ``authenticated`` (bool) and ``message`` (str | None). If not authenticated,
     call ``login`` to open the browser login page.
     """
+    _refresh_token_or_promote_pat()
     config = load_config()
     if config.token is None:
         return {
@@ -224,7 +225,28 @@ CRUD_ENTITIES = {
 }
 
 
+def _refresh_token_or_promote_pat() -> None:
+    """Attempt JWT refresh then CLI PAT promotion. Mirrors client.py logic."""
+    from dreamhubcli.auth import refresh_access_token
+    from dreamhubcli.config import save_config
+
+    config = load_config()
+    if config.token is None or config.token.startswith("pat_"):
+        return
+    if not is_token_expired(config.token):
+        return
+    if config.refresh_token:
+        refresh_access_token()
+        config = load_config()
+    if config.token and not config.token.startswith("pat_") and is_token_expired(config.token) and config.cli_pat:
+        logger.debug("MCP _client: JWT expired, promoting CLI PAT")
+        config.token = config.cli_pat
+        config.refresh_token = None
+        save_config(config)
+
+
 def _client() -> DreamhubClient:
+    _refresh_token_or_promote_pat()
     config = load_config()
     if config.token is None or is_token_expired(config.token):
         raise RuntimeError("Not logged in. Run `dh auth login` first.")
