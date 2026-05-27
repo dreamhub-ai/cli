@@ -213,8 +213,11 @@ def update_cli() -> dict:
         return {"updated": False, "message": "Update failed. Run 'pipx upgrade dreamhubcli' manually for details."}
 
     output = (result.stdout + result.stderr).strip()
+    if result.returncode != 0:
+        return {"updated": False, "message": f"Update failed: {output or 'unknown error'}. Run 'pipx upgrade dreamhubcli' manually for details."}
+
     already_latest = "already up-to-date" in output.lower() or "already at latest" in output.lower()
-    updated = result.returncode == 0 and not already_latest
+    updated = not already_latest
 
     return {
         "updated": updated,
