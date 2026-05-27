@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import secrets
+import shutil
+import subprocess
 import threading
 import webbrowser
 from typing import Any
@@ -12,7 +15,8 @@ import httpx
 from fastmcp import FastMCP
 from mcp.types import Icon
 
-from dreamhubcli.auth import create_cli_pat, is_token_expired, login_with_token
+from dreamhubcli import __version__
+from dreamhubcli.auth import create_cli_pat, is_token_expired, login_with_token, refresh_access_token
 from dreamhubcli.auth_callback import (
     CALLBACK_PORT,
     _build_auth_url,
@@ -22,7 +26,7 @@ from dreamhubcli.auth_callback import (
     _run_callback_server,
 )
 from dreamhubcli.client import DreamhubClient
-from dreamhubcli.config import load_config
+from dreamhubcli.config import load_config, save_config
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,10 @@ mcp = FastMCP(
     "dreamhub",
     instructions=(
         "Dreamhub CRM tools. "
+        "At the start of your first interaction with the user each session, call update_cli "
+        "to silently check for and apply any CLI updates. "
+        "If an update was applied, tell the user and ask them to restart Claude Desktop. "
+        "If already up to date, proceed without mentioning it. "
         "If a tool returns an authentication error, call check_auth_status to diagnose, "
         "then call login to open the browser login page if needed. "
         "Wait for login to complete before retrying the original request."
@@ -97,6 +105,7 @@ def check_auth_status() -> dict:
     ``authenticated`` (bool) and ``message`` (str | None). If not authenticated,
     call ``login`` to open the browser login page.
     """
+    _refresh_token_or_promote_pat()
     config = load_config()
     if config.token is None:
         return {
@@ -172,6 +181,59 @@ def login() -> dict:
         }
 
 
+@mcp.tool()
+def update_cli() -> dict:
+    """Check for and apply any available Dreamhub CLI updates.
+
+    Runs pipx upgrade in the background. Returns whether an update was applied
+    and the current version. If updated, the user must restart Claude Desktop.
+    """
+    pipx_bin = shutil.which("pipx") or shutil.which("pipx3")
+    if pipx_bin is None:
+        # Common fallback locations when Claude Desktop launches without full PATH
+        for candidate in ["/usr/local/bin/pipx", "/opt/homebrew/bin/pipx"]:
+            if os.path.isfile(candidate):
+                pipx_bin = candidate
+                break
+
+    if pipx_bin is None:
+        return {"updated": False, "message": "pipx not found. Run 'pipx upgrade dreamhubcli' manually."}
+
+    try:
+        result = subprocess.run(
+            [pipx_bin, "upgrade", "dreamhubcli"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return {"updated": False, "message": "Update check timed out. Try again later."}
+    except Exception as exc:
+        logger.warning("update_cli failed: %s", exc, exc_info=True)
+        return {"updated": False, "message": "Update failed. Run 'pipx upgrade dreamhubcli' manually for details."}
+
+    output = (result.stdout + result.stderr).strip()
+    if result.returncode != 0:
+        detail = output or "unknown error"
+        return {
+            "updated": False,
+            "message": f"Update failed: {detail}. Run 'pipx upgrade dreamhubcli' manually.",
+        }
+
+    already_latest = "already up-to-date" in output.lower() or "already at latest" in output.lower()
+    updated = not already_latest
+
+    return {
+        "updated": updated,
+        "version": __version__,
+        "message": (
+            "Updated successfully. Please restart Claude Desktop to apply the update."
+            if updated
+            else f"Already up to date (v{__version__})."
+        ),
+    }
+
+
 CRUD_ENTITIES = {
     "companies": {
         "path": "companies",
@@ -224,7 +286,25 @@ CRUD_ENTITIES = {
 }
 
 
+def _refresh_token_or_promote_pat() -> None:
+    """Attempt JWT refresh then CLI PAT promotion. Mirrors client.py logic."""
+    config = load_config()
+    if config.token is None or config.token.startswith("pat_"):
+        return
+    if not is_token_expired(config.token):
+        return
+    if config.refresh_token:
+        refresh_access_token()
+    config = load_config()
+    if config.token and not config.token.startswith("pat_") and is_token_expired(config.token) and config.cli_pat:
+        logger.debug("MCP _client: JWT expired, promoting CLI PAT")
+        config.token = config.cli_pat
+        config.refresh_token = None
+        save_config(config)
+
+
 def _client() -> DreamhubClient:
+    _refresh_token_or_promote_pat()
     config = load_config()
     if config.token is None or is_token_expired(config.token):
         raise RuntimeError("Not logged in. Run `dh auth login` first.")

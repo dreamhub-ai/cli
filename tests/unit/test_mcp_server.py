@@ -569,5 +569,125 @@ class TestToolRegistration:
 
         components = mcp._local_provider._components
         tool_keys = [k for k in components if k.startswith("tool:")]
-        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 2 auth tools (check_auth_status, login) = 49
-        assert len(tool_keys) == 49
+        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 50
+        assert len(tool_keys) == 50
+
+
+class TestUpdateCli:
+    def test_success_path(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shutil
+        import subprocess
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/pipx" if "pipx" in name else None)
+        result = subprocess.CompletedProcess(args=[], returncode=0, stdout="upgraded package dreamhubcli", stderr="")
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: result)
+
+        fn = _get_tool_fn("update_cli")
+        response = fn()
+        assert response["updated"] is True
+        assert "restart" in response["message"]
+
+    def test_already_up_to_date(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shutil
+        import subprocess
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/pipx" if "pipx" in name else None)
+        result = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="dreamhubcli is already up-to-date", stderr=""
+        )
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: result)
+
+        fn = _get_tool_fn("update_cli")
+        response = fn()
+        assert response["updated"] is False
+        assert "up to date" in response["message"]
+
+    def test_nonzero_exit_returns_failure(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shutil
+        import subprocess
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/pipx" if "pipx" in name else None)
+        result = subprocess.CompletedProcess(
+            args=[], returncode=1, stdout="", stderr="pip error: could not find package"
+        )
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: result)
+
+        fn = _get_tool_fn("update_cli")
+        response = fn()
+        assert response["updated"] is False
+        assert "Update failed" in response["message"]
+        assert "pip error" in response["message"]
+
+    def test_timeout_returns_failure(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shutil
+        import subprocess
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/pipx" if "pipx" in name else None)
+
+        def _raise_timeout(*a: object, **kw: object) -> None:
+            raise subprocess.TimeoutExpired(cmd="pipx", timeout=60)
+
+        monkeypatch.setattr(subprocess, "run", _raise_timeout)
+
+        fn = _get_tool_fn("update_cli")
+        response = fn()
+        assert response["updated"] is False
+        assert "timed out" in response["message"]
+
+    def test_pipx_not_found(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import os
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda name: None)
+        monkeypatch.setattr(os.path, "isfile", lambda path: False)
+
+        fn = _get_tool_fn("update_cli")
+        response = fn()
+        assert response["updated"] is False
+        assert "pipx not found" in response["message"]
+
+
+class TestClientCliPatFallback:
+    def test_promotes_cli_pat_when_jwt_expired_and_refresh_fails(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        from dreamhubcli.config import DreamhubConfig, save_config
+
+        expired_token = jwt.encode({"exp": int(time.time()) - 3600}, "secret", algorithm="HS256")
+        cli_pat = "pat_test_cli"
+        save_config(
+            DreamhubConfig(
+                token=expired_token,
+                refresh_token="refresh_xyz",
+                cli_pat=cli_pat,
+                tenant_id="t-1",
+            )
+        )
+
+        import respx as respx_mod
+
+        with respx_mod.mock:
+            respx_mod.post("https://auth.dreamhub.ai/oauth/token").mock(return_value=httpx.Response(401))
+            from dreamhubcli import mcp_server
+
+            mcp_server._refresh_token_or_promote_pat()
+
+        from dreamhubcli.config import load_config
+
+        config = load_config()
+        assert config.token == cli_pat
+        assert config.refresh_token is None
+
+    def test_client_raises_when_no_valid_token(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from dreamhubcli.config import DreamhubConfig, save_config
+
+        save_config(DreamhubConfig(token=None, tenant_id="t-1"))
+
+        from dreamhubcli.mcp_server import _client
+
+        with pytest.raises(RuntimeError, match="Not logged in"):
+            _client()
