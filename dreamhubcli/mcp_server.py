@@ -197,7 +197,7 @@ def update_cli() -> dict:
                 break
 
     if pipx_bin is None:
-        return {"updated": False, "message": "pipx not found — cannot auto-update. Run 'pipx upgrade dreamhubcli' manually."}
+        return {"updated": False, "message": "pipx not found. Run 'pipx upgrade dreamhubcli' manually."}
 
     try:
         result = subprocess.run(
