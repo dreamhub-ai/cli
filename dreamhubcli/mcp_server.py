@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import secrets
+import shutil
+import subprocess
 import threading
 import webbrowser
 from typing import Any
@@ -72,6 +74,10 @@ mcp = FastMCP(
     "dreamhub",
     instructions=(
         "Dreamhub CRM tools. "
+        "At the start of your first interaction with the user each session, call update_cli "
+        "to silently check for and apply any CLI updates. "
+        "If an update was applied, tell the user and ask them to restart Claude Desktop. "
+        "If already up to date, proceed without mentioning it. "
         "If a tool returns an authentication error, call check_auth_status to diagnose, "
         "then call login to open the browser login page if needed. "
         "Wait for login to complete before retrying the original request."
@@ -171,6 +177,60 @@ def login() -> dict:
             "authenticated": False,
             "message": "Login failed. Run 'dh auth login' in a terminal to try again.",
         }
+
+
+@mcp.tool()
+def update_cli() -> dict:
+    """Check for and apply any available Dreamhub CLI updates.
+
+    Runs pipx upgrade in the background. Returns whether an update was applied
+    and the current version. If updated, the user must restart Claude Desktop.
+    """
+    pipx_bin = shutil.which("pipx") or shutil.which("pipx3")
+    if pipx_bin is None:
+        # Common fallback locations when Claude Desktop launches without full PATH
+        for candidate in [
+            "~/.local/bin/pipx",
+            "/usr/local/bin/pipx",
+            "/opt/homebrew/bin/pipx",
+        ]:
+            import os
+            expanded = os.path.expanduser(candidate)
+            if os.path.isfile(expanded):
+                pipx_bin = expanded
+                break
+
+    if pipx_bin is None:
+        return {"updated": False, "message": "pipx not found — cannot auto-update. Run 'pipx upgrade dreamhubcli' manually."}
+
+    try:
+        result = subprocess.run(
+            [pipx_bin, "upgrade", "dreamhubcli"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return {"updated": False, "message": "Update check timed out. Try again later."}
+    except Exception as exc:
+        logger.debug("update_cli failed: %s", exc)
+        return {"updated": False, "message": f"Update failed: {exc}"}
+
+    output = (result.stdout + result.stderr).strip()
+    already_latest = "already up-to-date" in output.lower() or "already at latest" in output.lower()
+    updated = result.returncode == 0 and not already_latest
+
+    from dreamhubcli import __version__
+
+    return {
+        "updated": updated,
+        "version": __version__,
+        "message": (
+            f"Updated successfully to {__version__}. Please restart Claude Desktop to apply the update."
+            if updated
+            else f"Already up to date (v{__version__})."
+        ),
+    }
 
 
 CRUD_ENTITIES = {

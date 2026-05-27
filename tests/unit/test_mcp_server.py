@@ -569,5 +569,5 @@ class TestToolRegistration:
 
         components = mcp._local_provider._components
         tool_keys = [k for k in components if k.startswith("tool:")]
-        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 2 auth tools (check_auth_status, login) = 49
-        assert len(tool_keys) == 49
+        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 50
+        assert len(tool_keys) == 50
