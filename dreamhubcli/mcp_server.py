@@ -292,6 +292,10 @@ def _refresh_token_or_promote_pat() -> None:
     if config.token is None or config.token.startswith("pat_"):
         return
     if not is_token_expired(config.token):
+        # Lazily mint a CLI PAT for users who logged in before the PAT flow shipped,
+        # so tomorrow's JWT expiry can self-heal via PAT promotion below.
+        if not config.cli_pat:
+            create_cli_pat(config)
         return
     if config.refresh_token:
         refresh_access_token()

@@ -691,3 +691,73 @@ class TestClientCliPatFallback:
 
         with pytest.raises(RuntimeError, match="Not logged in"):
             _client()
+
+    def test_lazy_pat_creation_when_jwt_valid_and_pat_missing(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        from dreamhubcli.config import DreamhubConfig, save_config
+
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(
+            DreamhubConfig(
+                token=valid_token,
+                refresh_token="refresh_xyz",
+                tenant_id="t-1",
+            )
+        )
+
+        from dreamhubcli import mcp_server
+
+        calls: list[DreamhubConfig] = []
+
+        def fake_create(config: DreamhubConfig) -> None:
+            calls.append(config)
+            from dreamhubcli.config import load_config, save_config as _save
+
+            cfg = load_config()
+            cfg.cli_pat = "pat_lazy_created"
+            cfg.cli_pat_id = "pat-lazy-1"
+            _save(cfg)
+
+        monkeypatch.setattr(mcp_server, "create_cli_pat", fake_create)
+
+        mcp_server._refresh_token_or_promote_pat()
+
+        from dreamhubcli.config import load_config
+
+        config = load_config()
+        assert len(calls) == 1
+        assert config.cli_pat == "pat_lazy_created"
+        assert config.token == valid_token
+
+    def test_lazy_pat_creation_skipped_when_pat_already_present(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        from dreamhubcli.config import DreamhubConfig, save_config
+
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(
+            DreamhubConfig(
+                token=valid_token,
+                refresh_token="refresh_xyz",
+                cli_pat="pat_existing",
+                tenant_id="t-1",
+            )
+        )
+
+        from dreamhubcli import mcp_server
+
+        calls: list[object] = []
+        monkeypatch.setattr(mcp_server, "create_cli_pat", lambda c: calls.append(c))
+
+        mcp_server._refresh_token_or_promote_pat()
+
+        assert calls == []
