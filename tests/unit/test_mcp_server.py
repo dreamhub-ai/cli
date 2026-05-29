@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
+import jwt
 import pytest
 import respx
 
-from dreamhubcli.config import DreamhubConfig, save_config
+import dreamhubcli.mcp_server as mcp_server_mod
+from dreamhubcli.config import DreamhubConfig, load_config, save_config
 
 API_URL = "https://crm.dreamhub.ai/api/v1"
 
@@ -651,12 +654,6 @@ class TestClientCliPatFallback:
     def test_promotes_cli_pat_when_jwt_expired_and_refresh_fails(
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import time
-
-        import jwt
-
-        from dreamhubcli.config import DreamhubConfig, save_config
-
         expired_token = jwt.encode({"exp": int(time.time()) - 3600}, "secret", algorithm="HS256")
         cli_pat = "pat_test_cli"
         save_config(
@@ -668,23 +665,15 @@ class TestClientCliPatFallback:
             )
         )
 
-        import respx as respx_mod
-
-        with respx_mod.mock:
-            respx_mod.post("https://auth.dreamhub.ai/oauth/token").mock(return_value=httpx.Response(401))
-            from dreamhubcli import mcp_server
-
-            mcp_server._refresh_token_or_promote_pat()
-
-        from dreamhubcli.config import load_config
+        with respx.mock:
+            respx.post("https://auth.dreamhub.ai/oauth/token").mock(return_value=httpx.Response(401))
+            mcp_server_mod._refresh_token_or_promote_pat()
 
         config = load_config()
         assert config.token == cli_pat
         assert config.refresh_token is None
 
     def test_client_raises_when_no_valid_token(self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        from dreamhubcli.config import DreamhubConfig, save_config
-
         save_config(DreamhubConfig(token=None, tenant_id="t-1"))
 
         from dreamhubcli.mcp_server import _client
@@ -695,40 +684,21 @@ class TestClientCliPatFallback:
     def test_lazy_pat_creation_when_jwt_valid_and_pat_missing(
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import time
-
-        import jwt
-
-        from dreamhubcli.config import DreamhubConfig, save_config
-
+        monkeypatch.setattr(mcp_server_mod, "_cli_pat_creation_attempted", False)
         valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
-        save_config(
-            DreamhubConfig(
-                token=valid_token,
-                refresh_token="refresh_xyz",
-                tenant_id="t-1",
-            )
-        )
-
-        from dreamhubcli import mcp_server
+        save_config(DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", tenant_id="t-1"))
 
         calls: list[DreamhubConfig] = []
 
         def fake_create(config: DreamhubConfig) -> None:
             calls.append(config)
-            from dreamhubcli.config import load_config
-            from dreamhubcli.config import save_config as _save
-
             cfg = load_config()
             cfg.cli_pat = "pat_lazy_created"
             cfg.cli_pat_id = "pat-lazy-1"
-            _save(cfg)
+            save_config(cfg)
 
-        monkeypatch.setattr(mcp_server, "create_cli_pat", fake_create)
-
-        mcp_server._refresh_token_or_promote_pat()
-
-        from dreamhubcli.config import load_config
+        monkeypatch.setattr(mcp_server_mod, "create_cli_pat", fake_create)
+        mcp_server_mod._refresh_token_or_promote_pat()
 
         config = load_config()
         assert len(calls) == 1
@@ -738,27 +708,31 @@ class TestClientCliPatFallback:
     def test_lazy_pat_creation_skipped_when_pat_already_present(
         self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import time
-
-        import jwt
-
-        from dreamhubcli.config import DreamhubConfig, save_config
-
+        monkeypatch.setattr(mcp_server_mod, "_cli_pat_creation_attempted", False)
         valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
         save_config(
-            DreamhubConfig(
-                token=valid_token,
-                refresh_token="refresh_xyz",
-                cli_pat="pat_existing",
-                tenant_id="t-1",
-            )
+            DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", cli_pat="pat_existing", tenant_id="t-1")
         )
 
-        from dreamhubcli import mcp_server
-
         calls: list[object] = []
-        monkeypatch.setattr(mcp_server, "create_cli_pat", lambda c: calls.append(c))
-
-        mcp_server._refresh_token_or_promote_pat()
+        monkeypatch.setattr(mcp_server_mod, "create_cli_pat", lambda c: calls.append(c))
+        mcp_server_mod._refresh_token_or_promote_pat()
 
         assert calls == []
+
+    def test_lazy_pat_creation_attempted_at_most_once_on_failure(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(mcp_server_mod, "_cli_pat_creation_attempted", False)
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", tenant_id="t-1"))
+
+        calls: list[DreamhubConfig] = []
+        monkeypatch.setattr(mcp_server_mod, "create_cli_pat", lambda c: calls.append(c))
+
+        # Simulate two back-to-back tool calls; create_cli_pat swallows the error
+        # and doesn't write cli_pat, so it stays None — but the flag prevents retry.
+        mcp_server_mod._refresh_token_or_promote_pat()
+        mcp_server_mod._refresh_token_or_promote_pat()
+
+        assert len(calls) == 1, "create_cli_pat must not be retried after a failed attempt"
