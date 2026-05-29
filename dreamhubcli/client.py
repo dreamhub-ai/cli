@@ -11,6 +11,7 @@ import typer
 
 from dreamhubcli import __version__
 from dreamhubcli.auth import (
+    create_cli_pat,
     get_auth_headers,
     is_token_expired,
     refresh_access_token,
@@ -75,8 +76,10 @@ class DreamhubClient:
             rotate_cli_pat_if_needed(config)
             return
 
-        # JWT not expired — nothing to do
+        # JWT not expired — lazily mint a CLI PAT if one is missing
         if not is_token_expired(config.token):
+            if not config.cli_pat:
+                create_cli_pat(config)
             return
 
         # Try JWT refresh first

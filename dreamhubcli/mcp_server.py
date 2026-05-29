@@ -32,7 +32,9 @@ logger = logging.getLogger(__name__)
 
 # Guards the lazy PAT-creation path — attempt at most once per process lifetime
 # so a transient API failure doesn't turn every tool call into a retry POST.
+# Lock ensures only one thread wins the check-and-set under FastMCP thread-pool dispatch.
 _cli_pat_creation_attempted: bool = False
+_cli_pat_creation_lock: threading.Lock = threading.Lock()
 
 # Logo_App_rounded.svg encoded as base64 (split to stay within line-length limits)
 _ICON_B64 = (
@@ -305,9 +307,11 @@ def _refresh_token_or_promote_pat() -> None:
     if config.token is None or config.token.startswith("pat_"):
         return
     if not is_token_expired(config.token):
-        if not config.cli_pat and not _cli_pat_creation_attempted:
-            _cli_pat_creation_attempted = True
-            create_cli_pat(config)
+        if not config.cli_pat:
+            with _cli_pat_creation_lock:
+                if not _cli_pat_creation_attempted:
+                    _cli_pat_creation_attempted = True
+                    create_cli_pat(config)
         return
     if config.refresh_token:
         refresh_access_token()
