@@ -716,7 +716,8 @@ class TestClientCliPatFallback:
 
         def fake_create(config: DreamhubConfig) -> None:
             calls.append(config)
-            from dreamhubcli.config import load_config, save_config as _save
+            from dreamhubcli.config import load_config
+            from dreamhubcli.config import save_config as _save
 
             cfg = load_config()
             cfg.cli_pat = "pat_lazy_created"
