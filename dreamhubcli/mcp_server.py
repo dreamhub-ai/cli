@@ -308,10 +308,13 @@ def _refresh_token_or_promote_pat() -> None:
         return
     if not is_token_expired(config.token):
         if not config.cli_pat:
+            should_create_cli_pat = False
             with _cli_pat_creation_lock:
                 if not _cli_pat_creation_attempted:
                     _cli_pat_creation_attempted = True
-                    create_cli_pat(config)
+                    should_create_cli_pat = True
+            if should_create_cli_pat:
+                create_cli_pat(config)
         return
     if config.refresh_token:
         refresh_access_token()

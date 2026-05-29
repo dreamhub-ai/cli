@@ -223,3 +223,81 @@ class TestClient401Refresh:
         response = client.post("companies", json_payload={"name": "Acme"})
         assert response.status_code == 401
         assert route.call_count == 1  # not retried
+
+
+class TestClientLazyCliPat:
+    """Mirror of mcp_server lazy-PAT tests for DreamhubClient._maybe_refresh_proactively()."""
+
+    def test_lazy_pat_creation_when_jwt_valid_and_pat_missing(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        import dreamhubcli.client as client_mod
+        from dreamhubcli.config import load_config
+
+        monkeypatch.setattr(client_mod, "_cli_pat_creation_attempted", False)
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", tenant_id="t-1"))
+
+        calls: list[DreamhubConfig] = []
+
+        def fake_create(config: DreamhubConfig) -> None:
+            calls.append(config)
+            cfg = load_config()
+            cfg.cli_pat = "pat_lazy_created"
+            cfg.cli_pat_id = "pat-lazy-1"
+            save_config(cfg)
+
+        monkeypatch.setattr(client_mod, "create_cli_pat", fake_create)
+        DreamhubClient()._maybe_refresh_proactively()
+
+        config = load_config()
+        assert len(calls) == 1
+        assert config.cli_pat == "pat_lazy_created"
+        assert config.token == valid_token
+
+    def test_lazy_pat_creation_skipped_when_pat_already_present(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        import dreamhubcli.client as client_mod
+
+        monkeypatch.setattr(client_mod, "_cli_pat_creation_attempted", False)
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(
+            DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", cli_pat="pat_existing", tenant_id="t-1")
+        )
+
+        calls: list[object] = []
+        monkeypatch.setattr(client_mod, "create_cli_pat", lambda c: calls.append(c))
+        DreamhubClient()._maybe_refresh_proactively()
+
+        assert calls == []
+
+    def test_lazy_pat_creation_attempted_at_most_once_on_failure(
+        self, temp_config_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import time
+
+        import jwt
+
+        import dreamhubcli.client as client_mod
+
+        monkeypatch.setattr(client_mod, "_cli_pat_creation_attempted", False)
+        valid_token = jwt.encode({"exp": int(time.time()) + 3600}, "secret", algorithm="HS256")
+        save_config(DreamhubConfig(token=valid_token, refresh_token="refresh_xyz", tenant_id="t-1"))
+
+        calls: list[DreamhubConfig] = []
+        monkeypatch.setattr(client_mod, "create_cli_pat", lambda c: calls.append(c))
+
+        client = DreamhubClient()
+        client._maybe_refresh_proactively()
+        client._maybe_refresh_proactively()
+
+        assert len(calls) == 1, "create_cli_pat must not be retried after a failed attempt"
