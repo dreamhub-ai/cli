@@ -30,6 +30,12 @@ from dreamhubcli.config import load_config, save_config
 
 logger = logging.getLogger(__name__)
 
+# Guards the lazy PAT-creation path — attempt at most once per process lifetime
+# so a transient API failure doesn't turn every tool call into a retry POST.
+# Lock ensures only one thread wins the check-and-set under FastMCP thread-pool dispatch.
+_cli_pat_creation_attempted: bool = False
+_cli_pat_creation_lock: threading.Lock = threading.Lock()
+
 # Logo_App_rounded.svg encoded as base64 (split to stay within line-length limits)
 _ICON_B64 = (
     "PHN2ZyB3aWR0aD0iMzgiIGhlaWdodD0iMzgiIHZpZXdCb3g9IjAgMCAzOCAzOCIgZmlsbD0ibm9uZSIgeG1sbnM9"
@@ -287,11 +293,28 @@ CRUD_ENTITIES = {
 
 
 def _refresh_token_or_promote_pat() -> None:
-    """Attempt JWT refresh then CLI PAT promotion. Mirrors client.py logic."""
+    """Attempt JWT refresh then CLI PAT promotion.
+
+    Also lazily mints a CLI PAT when the JWT is valid but no PAT exists yet —
+    self-healing users who logged in before the PAT flow shipped. The mint is
+    attempted at most once per process lifetime (see _cli_pat_creation_attempted)
+    so a transient API failure doesn't add a blocking HTTP POST to every tool call.
+
+    client.py has a parallel implementation for the CLI code path; keep in sync.
+    """
+    global _cli_pat_creation_attempted
     config = load_config()
     if config.token is None or config.token.startswith("pat_"):
         return
     if not is_token_expired(config.token):
+        if not config.cli_pat:
+            should_create_cli_pat = False
+            with _cli_pat_creation_lock:
+                if not _cli_pat_creation_attempted:
+                    _cli_pat_creation_attempted = True
+                    should_create_cli_pat = True
+            if should_create_cli_pat:
+                create_cli_pat(config)
         return
     if config.refresh_token:
         refresh_access_token()

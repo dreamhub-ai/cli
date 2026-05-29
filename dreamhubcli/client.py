@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -11,6 +12,7 @@ import typer
 
 from dreamhubcli import __version__
 from dreamhubcli.auth import (
+    create_cli_pat,
     get_auth_headers,
     is_token_expired,
     refresh_access_token,
@@ -25,6 +27,13 @@ DEFAULT_TIMEOUT = 30.0
 USER_AGENT = f"dreamhub-cli/{__version__}"
 _MAX_RETRIES = 3
 _IDEMPOTENT_METHODS = {"GET", "HEAD", "OPTIONS", "PUT"}
+
+# Guards the lazy PAT-creation path — attempt at most once per process lifetime
+# so a transient API failure doesn't turn every request into a retry POST.
+# Mirrors the pattern in mcp_server.py; kept separate since CLI and MCP run in
+# different processes and shouldn't share state.
+_cli_pat_creation_attempted: bool = False
+_cli_pat_creation_lock: threading.Lock = threading.Lock()
 
 
 class DreamhubClient:
@@ -75,8 +84,20 @@ class DreamhubClient:
             rotate_cli_pat_if_needed(config)
             return
 
-        # JWT not expired — nothing to do
+        # JWT not expired — lazily mint a CLI PAT if one is missing.
+        # Guard with a one-time flag so a transient mint failure doesn't add a
+        # blocking POST to every API call; lock prevents concurrent callers
+        # from racing into duplicate PAT mints.
         if not is_token_expired(config.token):
+            if not config.cli_pat:
+                global _cli_pat_creation_attempted
+                should_create_cli_pat = False
+                with _cli_pat_creation_lock:
+                    if not _cli_pat_creation_attempted:
+                        _cli_pat_creation_attempted = True
+                        should_create_cli_pat = True
+                if should_create_cli_pat:
+                    create_cli_pat(config)
             return
 
         # Try JWT refresh first
