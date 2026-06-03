@@ -145,7 +145,7 @@ else
         eval "$(/usr/local/bin/brew shellenv)"
       fi
     fi
-    brew install python@3.12
+    brew install python@3.12 || fail "Failed to install Python via Homebrew. Try running 'brew install python@3.12' manually and re-run this installer."
   elif [[ "$OS" == "Linux" ]]; then
     # Acquire sudo upfront (stdin may be a pipe from curl|bash)
     info "Package install needs admin access. Enter your password:"
@@ -179,7 +179,7 @@ else
   info "Installing pipx..."
 
   if [[ "$OS" == "Darwin" ]] && command_exists brew; then
-    brew install pipx
+    brew install pipx || fail "Failed to install pipx via Homebrew. Try running 'brew install pipx' manually and re-run this installer."
   else
     "$PYTHON_BIN" -m pip install --user pipx 2>/dev/null || "$PYTHON_BIN" -m pip install pipx
   fi
@@ -198,8 +198,22 @@ else
 fi
 
 # Step 3: Install Dreamhub CLI
+# If Homebrew is present, re-evaluate shellenv to pick up any newly installed binaries
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  if [[ -f /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -f /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+fi
+
 info "Installing Dreamhub CLI..."
-pipx install "git+${REPO}" --force --python "$PYTHON_BIN"
+if ! pipx install "git+${REPO}" --force --python "$PYTHON_BIN"; then
+  echo ""
+  fail "Failed to install Dreamhub CLI. Check your internet connection and try again.
+  If the issue persists, try:
+    pipx install \"git+${REPO}\" --python \"$PYTHON_BIN\""
+fi
 
 # Step 4: Ensure dh is reachable for this session
 NEEDED_PATH_FIX=false
