@@ -198,7 +198,7 @@ else
 fi
 
 # Step 3: Install Dreamhub CLI
-# Re-evaluate brew shellenv to ensure PATH is current regardless of which install path was taken
+# If Homebrew is present, re-evaluate shellenv to pick up any newly installed binaries
 if [[ "$(uname -s)" == "Darwin" ]]; then
   if [[ -f /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -212,7 +212,7 @@ if ! pipx install "git+${REPO}" --force --python "$PYTHON_BIN"; then
   echo ""
   fail "Failed to install Dreamhub CLI. Check your internet connection and try again.
   If the issue persists, try:
-    pipx install \"git+${REPO}\" --python $PYTHON_BIN"
+    pipx install \"git+${REPO}\" --python \"$PYTHON_BIN\""
 fi
 
 # Step 4: Ensure dh is reachable for this session
