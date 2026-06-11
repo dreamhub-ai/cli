@@ -22,3 +22,6 @@ htmlcov/
 
 # JetBrains IDE
 .idea/
+
+# macOS
+.DS_Store
