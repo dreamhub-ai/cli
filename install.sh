@@ -152,9 +152,9 @@ else
       }
 
       # Add brew to PATH for this session (Apple Silicon vs Intel)
-      if [[ -f /opt/homebrew/bin/brew ]]; then
+      if [[ -x /opt/homebrew/bin/brew ]]; then
         eval "$(/opt/homebrew/bin/brew shellenv)"
-      elif [[ -f /usr/local/bin/brew ]]; then
+      elif [[ -x /usr/local/bin/brew ]]; then
         eval "$(/usr/local/bin/brew shellenv)"
       fi
     fi
@@ -213,9 +213,9 @@ fi
 # Step 3: Install Dreamhub CLI
 # If Homebrew is present, re-evaluate shellenv to pick up any newly installed binaries
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  if [[ -f /opt/homebrew/bin/brew ]]; then
+  if [[ -x /opt/homebrew/bin/brew ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
-  elif [[ -f /usr/local/bin/brew ]]; then
+  elif [[ -x /usr/local/bin/brew ]]; then
     eval "$(/usr/local/bin/brew shellenv)"
   fi
 fi
