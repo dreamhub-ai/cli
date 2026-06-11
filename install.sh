@@ -106,6 +106,17 @@ echo ""
 
 OS="$(uname -s)"
 
+# Pick up Homebrew from a previous install — non-interactive `bash -s` doesn't
+# read the user's shell profile, so brew at /opt/homebrew/bin is invisible to
+# command_exists unless we source shellenv first.
+if [[ "$OS" == "Darwin" ]]; then
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [[ -x /usr/local/bin/brew ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+fi
+
 # Step 1: Ensure Python 3.11+
 if PYTHON_BIN=$(detect_python); then
   PYTHON_VER=$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
@@ -122,7 +133,9 @@ else
       if ! sudo -v < /dev/tty; then
         fail "Unable to acquire admin credentials. Re-run the installer and enter your password when prompted."
       fi
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
+      # </dev/null: prevent Homebrew subprocesses from draining the piped install.sh
+      # bytes from stdin — bash reads this script lazily from the curl|bash pipe.
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" </dev/null || {
         echo ""
         fail "Homebrew installation failed. You may need admin privileges.
 
@@ -145,18 +158,18 @@ else
         eval "$(/usr/local/bin/brew shellenv)"
       fi
     fi
-    brew install python@3.12 || fail "Failed to install Python via Homebrew. Try running 'brew install python@3.12' manually and re-run this installer."
+    brew install python@3.12 </dev/null || fail "Failed to install Python via Homebrew. Try running 'brew install python@3.12' manually and re-run this installer."
   elif [[ "$OS" == "Linux" ]]; then
     # Acquire sudo upfront (stdin may be a pipe from curl|bash)
     info "Package install needs admin access. Enter your password:"
     sudo -v < /dev/tty 2>/dev/null || true
     if command_exists apt-get; then
-      sudo apt-get update -qq
-      sudo apt-get install -y -qq python3 python3-pip python3-venv
+      sudo apt-get update -qq </dev/null
+      sudo apt-get install -y -qq python3 python3-pip python3-venv </dev/null
     elif command_exists dnf; then
-      sudo dnf install -y python3 python3-pip
+      sudo dnf install -y python3 python3-pip </dev/null
     elif command_exists yum; then
-      sudo yum install -y python3 python3-pip
+      sudo yum install -y python3 python3-pip </dev/null
     else
       fail "Could not detect package manager. Please install Python $MIN_PYTHON+ manually and re-run."
     fi
@@ -179,9 +192,9 @@ else
   info "Installing pipx..."
 
   if [[ "$OS" == "Darwin" ]] && command_exists brew; then
-    brew install pipx || fail "Failed to install pipx via Homebrew. Try running 'brew install pipx' manually and re-run this installer."
+    brew install pipx </dev/null || fail "Failed to install pipx via Homebrew. Try running 'brew install pipx' manually and re-run this installer."
   else
-    "$PYTHON_BIN" -m pip install --user pipx 2>/dev/null || "$PYTHON_BIN" -m pip install pipx
+    "$PYTHON_BIN" -m pip install --user pipx </dev/null 2>/dev/null || "$PYTHON_BIN" -m pip install pipx </dev/null
   fi
 
   # Ensure pipx binary dir is on PATH
@@ -208,7 +221,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 fi
 
 info "Installing Dreamhub CLI..."
-if ! pipx install "git+${REPO}" --force --python "$PYTHON_BIN"; then
+if ! pipx install "git+${REPO}" --force --python "$PYTHON_BIN" </dev/null; then
   echo ""
   fail "Failed to install Dreamhub CLI. Check your internet connection and try again.
   If the issue persists, try:
