@@ -224,6 +224,26 @@ class TestClient401Refresh:
         assert response.status_code == 401
         assert route.call_count == 1  # not retried
 
+    @respx.mock
+    def test_401_post_retried_when_marked_idempotent(self, temp_config_dir: Path) -> None:
+        """Read-only POST endpoints (filter/fetch bodies) opt in via idempotent=True."""
+        save_config(DreamhubConfig(token="expired_token", refresh_token="refresh_abc", tenant_id="t-1"))
+        route = respx.post("https://api.test/v1/companies/filter").mock(
+            side_effect=[
+                httpx.Response(401, text="Unauthorized"),
+                httpx.Response(200, json={"companies": []}),
+            ]
+        )
+        respx.post(url__regex=r".*/oauth/token$").mock(
+            return_value=httpx.Response(200, json={"access_token": "new_token", "refresh_token": "new_refresh"})
+        )
+        client = DreamhubClient(api_url="https://api.test/v1")
+        response = client.post("companies/filter", json_payload={"filters": {}}, idempotent=True)
+        assert response.status_code == 200
+        assert route.call_count == 2
+        retry_auth = route.calls[1].request.headers["authorization"]
+        assert retry_auth == "Bearer new_token"
+
 
 class TestClientLazyCliPat:
     """Mirror of mcp_server lazy-PAT tests for DreamhubClient._maybe_refresh_proactively()."""

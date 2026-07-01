@@ -48,7 +48,7 @@ def search_command(
         payload["sortBy"] = sort_by
     try:
         with console.status("Searching...", spinner="dots"):
-            response = client.post("search/global", json_payload=payload)
+            response = client.post("search/global", json_payload=payload, idempotent=True)
     except KeyboardInterrupt:
         raise typer.Exit(code=1) from None
     handle_response(response, verbose=ctx.obj.get("verbose", False))

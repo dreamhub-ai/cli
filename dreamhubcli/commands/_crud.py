@@ -175,6 +175,7 @@ def build_crud_app(
                     f"{resource_path}/filter",
                     params={"page": page, "size": page_size},
                     json_payload={"filters": {}},
+                    idempotent=True,
                 )
         except KeyboardInterrupt:
             raise typer.Exit(code=1)
@@ -392,6 +393,7 @@ def build_crud_app(
                     f"{resource_path}/filter",
                     params={"page": page, "size": page_size},
                     json_payload=parsed_payload,
+                    idempotent=True,
                 )
         except KeyboardInterrupt:
             raise typer.Exit(code=1)
