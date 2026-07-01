@@ -335,13 +335,13 @@ def _client() -> DreamhubClient:
 
 
 def _ok(response: httpx.Response) -> dict:
-    """Return JSON from response, raising on HTTP errors."""
+    """Return JSON from response; non-2xx responses become a structured error dict instead of raising."""
     if response.status_code == 401:
         return {
             "error": True,
             "status": 401,
             "detail": (
-                "Authentication expired or invalid, even after an automatic refresh attempt. "
+                "Authentication expired or invalid. "
                 "Call check_auth_status to diagnose, then call login to re-authenticate. "
                 "Wait for login to complete before retrying the original request."
             ),
