@@ -51,6 +51,17 @@ class TestHelpers:
         assert result["error"] is True
         assert result["status"] == 404
 
+    def test_ok_401_instructs_login_tool(self) -> None:
+        """A 401 that survives the client's own retry must tell the model to call login."""
+        from dreamhubcli.mcp_server import _ok
+
+        response = httpx.Response(401, text="Unauthorized")
+        result = _ok(response)
+        assert result["error"] is True
+        assert result["status"] == 401
+        assert "login" in result["detail"].lower()
+        assert "check_auth_status" in result["detail"]
+
     def test_enrich_labels(self) -> None:
         from dreamhubcli.mcp_server import _enrich_labels
 

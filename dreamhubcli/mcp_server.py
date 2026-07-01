@@ -330,12 +330,22 @@ def _client() -> DreamhubClient:
     _refresh_token_or_promote_pat()
     config = load_config()
     if config.token is None or is_token_expired(config.token):
-        raise RuntimeError("Not logged in. Run `dh auth login` first.")
+        raise RuntimeError("Not logged in. Call the login tool to open the browser login page.")
     return DreamhubClient()
 
 
 def _ok(response: httpx.Response) -> dict:
     """Return JSON from response, raising on HTTP errors."""
+    if response.status_code == 401:
+        return {
+            "error": True,
+            "status": 401,
+            "detail": (
+                "Authentication expired or invalid, even after an automatic refresh attempt. "
+                "Call check_auth_status to diagnose, then call login to re-authenticate. "
+                "Wait for login to complete before retrying the original request."
+            ),
+        }
     if response.status_code >= 400:
         return {"error": True, "status": response.status_code, "detail": response.text[:500]}
     return response.json()
