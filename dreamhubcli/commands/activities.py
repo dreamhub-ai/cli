@@ -112,7 +112,9 @@ def list_activities(
         payload["includeRaw"] = True
     try:
         with console.status("Fetching activities...", spinner="dots"):
-            response = client.post(f"{resource_path}/{entity_id}/activities/fetch", json_payload=payload)
+            response = client.post(
+                f"{resource_path}/{entity_id}/activities/fetch", json_payload=payload, retry_on_401=True
+            )
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
     handle_response(response, verbose=ctx.obj.get("verbose", False))
@@ -166,7 +168,9 @@ def get_activity(
     client = DreamhubClient(api_url=api_url)
     try:
         with console.status("Fetching activity...", spinner="dots"):
-            response = client.post(f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": size})
+            response = client.post(
+                f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": size}, retry_on_401=True
+            )
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
     handle_response(response, verbose=ctx.obj.get("verbose", False))

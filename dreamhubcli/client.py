@@ -119,6 +119,7 @@ class DreamhubClient:
         params: dict[str, Any] | None = None,
         json_payload: dict[str, Any] | list[Any] | None = None,
         extra_headers: dict[str, str] | None = None,
+        retry_on_401: bool = False,
     ) -> httpx.Response:
         """Execute an HTTP request against the Dreamhub API."""
         self._maybe_refresh_proactively()
@@ -147,11 +148,15 @@ class DreamhubClient:
             _print_error(f"Network error: {exc}")
             raise typer.Exit(code=1)
 
-        # 401 — retry once with a refreshed token, but only for idempotent methods
-        # to avoid duplicating side effects on POST/PATCH/DELETE.
+        # 401 — retry once with a refreshed token, but only when the request is safe
+        # to replay, to avoid duplicating side effects on POST/PATCH/DELETE. Read-only
+        # POST endpoints (filter/fetch bodies) pass retry_on_401=True explicitly since
+        # the HTTP method alone doesn't reflect that they have no side effects.
         _extra_header_names = {k.lower() for k in (extra_headers or {})}
-        _is_idempotent = method.upper() in _IDEMPOTENT_METHODS or "idempotency-key" in _extra_header_names
-        if response.status_code == 401 and _is_idempotent:
+        _safe_to_retry = (
+            method.upper() in _IDEMPOTENT_METHODS or retry_on_401 or "idempotency-key" in _extra_header_names
+        )
+        if response.status_code == 401 and _safe_to_retry:
             refreshed = refresh_access_token()
             if not refreshed:
                 # JWT refresh failed — try CLI PAT fallback
@@ -195,8 +200,14 @@ class DreamhubClient:
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> httpx.Response:
         return self.request("GET", path, params=params)
 
-    def post(self, path: str, *, json_payload: dict[str, Any] | list[Any] | None = None) -> httpx.Response:
-        return self.request("POST", path, json_payload=json_payload)
+    def post(
+        self,
+        path: str,
+        *,
+        json_payload: dict[str, Any] | list[Any] | None = None,
+        retry_on_401: bool = False,
+    ) -> httpx.Response:
+        return self.request("POST", path, json_payload=json_payload, retry_on_401=retry_on_401)
 
     def put(self, path: str, *, json_payload: dict[str, Any] | None = None) -> httpx.Response:
         return self.request("PUT", path, json_payload=json_payload)
