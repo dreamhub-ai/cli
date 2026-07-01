@@ -418,7 +418,7 @@ def _build_list_fn(entity_path: str, collection_key: str, entity_cfg: dict) -> A
             f"{entity_path}/filter",
             params={"page": page, "size": page_size},
             json_payload={"filters": {}},
-            idempotent=True,
+            retry_on_401=True,
         )
         data = _ok(response)
         return _enrich_response(data, collection_key, _get_effective_labels(entity_cfg))
@@ -484,7 +484,7 @@ def _build_filter_fn(entity_path: str, collection_key: str, entity_cfg: dict) ->
             f"{entity_path}/filter",
             params={"page": page, "size": page_size},
             json_payload={"filters": filters},
-            idempotent=True,
+            retry_on_401=True,
         )
         if response.status_code == 404:
             return {collection_key: [], "total": 0, "page": page, "pageSize": page_size}
@@ -620,7 +620,7 @@ def list_activities(
         payload["peopleIds"] = people_ids
     if tags:
         payload["activitiesTags"] = tags
-    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload=payload, idempotent=True)
+    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload=payload, retry_on_401=True)
     data = _ok(response)
     if "error" not in data:
         for activity in data.get("activities", []):
@@ -641,7 +641,7 @@ def get_activity(entity_type: str, entity_id: str, activity_id: str, size: int =
     """Get a single activity by ID from an entity's activity list."""
     resource = _resolve_entity_resource(entity_type)
     client = _client()
-    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload={"size": size}, idempotent=True)
+    response = client.post(f"{resource}/{entity_id}/activities/fetch", json_payload={"size": size}, retry_on_401=True)
     data = _ok(response)
     if "error" in data:
         return data
@@ -712,7 +712,7 @@ def search(
         payload["filterBy"] = filter_by
     if sort_by:
         payload["sortBy"] = sort_by
-    response = client.post("search/global", json_payload=payload, idempotent=True)
+    response = client.post("search/global", json_payload=payload, retry_on_401=True)
     return _ok(response)
 
 

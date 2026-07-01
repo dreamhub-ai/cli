@@ -113,7 +113,7 @@ def list_activities(
     try:
         with console.status("Fetching activities...", spinner="dots"):
             response = client.post(
-                f"{resource_path}/{entity_id}/activities/fetch", json_payload=payload, idempotent=True
+                f"{resource_path}/{entity_id}/activities/fetch", json_payload=payload, retry_on_401=True
             )
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
@@ -169,7 +169,7 @@ def get_activity(
     try:
         with console.status("Fetching activity...", spinner="dots"):
             response = client.post(
-                f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": size}, idempotent=True
+                f"{resource_path}/{entity_id}/activities/fetch", json_payload={"size": size}, retry_on_401=True
             )
     except KeyboardInterrupt:
         raise typer.Exit(code=1)
