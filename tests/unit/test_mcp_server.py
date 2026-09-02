@@ -29,13 +29,18 @@ def _reset_stage_cache() -> None:
     mod._stage_cache = None
 
 
-def _get_tool_fn(name: str) -> Any:
-    """Get a registered MCP tool function by name."""
+def _registered_tools() -> dict[str, Tool]:
+    """Every registered tool by name, read through the provider's public API."""
     from dreamhubcli.mcp_server import mcp
 
-    component = mcp._local_provider._components.get(f"tool:{name}@")
-    assert component is not None, f"Tool '{name}' not registered"
-    return component.fn
+    return {tool.name: tool for tool in asyncio.run(mcp.local_provider.list_tools())}
+
+
+def _get_tool_fn(name: str) -> Any:
+    """Get a registered MCP tool function by name."""
+    tool = _registered_tools().get(name)
+    assert tool is not None, f"Tool '{name}' not registered"
+    return tool.fn
 
 
 class TestHelpers:
@@ -549,21 +554,19 @@ class TestDealStagesTool:
 
 class TestToolRegistration:
     def test_crud_tools_registered(self) -> None:
-        from dreamhubcli.mcp_server import SINGULAR_NAMES, mcp
+        from dreamhubcli.mcp_server import SINGULAR_NAMES
 
-        components = mcp._local_provider._components
+        tools = _registered_tools()
         for entity, singular in SINGULAR_NAMES.items():
-            assert f"tool:list_{entity}@" in components, f"list_{entity} not registered"
-            assert f"tool:get_{singular}@" in components, f"get_{singular} not registered"
-            assert f"tool:create_{singular}@" in components, f"create_{singular} not registered"
-            assert f"tool:update_{singular}@" in components, f"update_{singular} not registered"
-            assert f"tool:delete_{singular}@" in components, f"delete_{singular} not registered"
-            assert f"tool:filter_{entity}@" in components, f"filter_{entity} not registered"
+            assert f"list_{entity}" in tools, f"list_{entity} not registered"
+            assert f"get_{singular}" in tools, f"get_{singular} not registered"
+            assert f"create_{singular}" in tools, f"create_{singular} not registered"
+            assert f"update_{singular}" in tools, f"update_{singular} not registered"
+            assert f"delete_{singular}" in tools, f"delete_{singular} not registered"
+            assert f"filter_{entity}" in tools, f"filter_{entity} not registered"
 
     def test_custom_tools_registered(self) -> None:
-        from dreamhubcli.mcp_server import mcp
-
-        components = mcp._local_provider._components
+        tools = _registered_tools()
         expected = [
             "list_activities",
             "get_activity",
@@ -578,15 +581,11 @@ class TestToolRegistration:
             "set_setting",
         ]
         for name in expected:
-            assert f"tool:{name}@" in components, f"{name} not registered"
+            assert name in tools, f"{name} not registered"
 
     def test_total_tool_count(self) -> None:
-        from dreamhubcli.mcp_server import mcp
-
-        components = mcp._local_provider._components
-        tool_keys = [k for k in components if k.startswith("tool:")]
         # 7 entities * 6 CRUD ops = 42 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 56
-        assert len(tool_keys) == 56
+        assert len(_registered_tools()) == 56
 
 
 class TestUpdateCli:
@@ -756,9 +755,7 @@ class TestToolAnnotations:
     tool prompts identically to a delete, so the prompt stops carrying signal."""
 
     def _tools(self) -> dict[str, Tool]:
-        from dreamhubcli.mcp_server import mcp
-
-        return {tool.name: tool for tool in asyncio.run(mcp.local_provider.list_tools())}
+        return _registered_tools()
 
     def test_every_registered_tool_advertises_risk_hints(self) -> None:
         unannotated = sorted(name for name, tool in self._tools().items() if tool.annotations is None)

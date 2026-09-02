@@ -267,10 +267,19 @@ class TestCompaniesCommands:
         assert result.exit_code == 1
         assert "Unknown operator" in result.output
 
+    def test_filter_rejects_nin(self, temp_config_dir: Path) -> None:
+        """The API has no `nin` branch — it raises on the operator, so the CLI must not forward it."""
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        result = runner.invoke(app, ["companies", "filter", "name", "nin", "Acme"])
+        assert result.exit_code == 1
+        assert "Unknown operator" in result.output
+
     def test_filter_help_shows_examples(self) -> None:
         result = runner.invoke(app, ["companies", "filter", "--help"])
         assert result.exit_code == 0
         assert "Examples:" in result.output
+        assert "not_in" in result.output
+        assert " nin " not in result.output
 
 
 class TestDealsCommands:

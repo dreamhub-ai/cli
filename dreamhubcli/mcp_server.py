@@ -96,6 +96,12 @@ mcp = FastMCP(
 # Risk hints let a client decide which calls need a human in the loop. Without
 # them every tool looks alike, so a read prompts exactly like a delete and the
 # prompting stops carrying information.
+#
+# READ_ONLY describes the Dreamhub side: the call reads and never writes. Every
+# one of these routes through _client(), which refreshes the session and can mint
+# a CLI PAT and rewrite ~/.dreamhub/config.toml. That is a local credential
+# refresh on data the caller already holds, not a change to anything the tool
+# reads, so the hint stands -- but it is a side effect and is stated here.
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 CREATES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
 UPDATES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
@@ -135,11 +141,19 @@ def check_auth_status() -> dict:
 
 
 # Open-world: hands control to the browser and an external identity provider.
+# Idempotent in the sense the hint is read for -- a repeat call on a live session
+# returns "Already logged in" without touching the identity provider. Once the
+# session is gone the repeat re-runs the flow and mints a new token, which is the
+# point of calling it again rather than a surprise.
 @mcp.tool(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
 )
 def login() -> dict:
-    """Open the browser for Dreamhub login. Returns once login completes or times out."""
+    """Open the browser for Dreamhub login. Returns once login completes or times out.
+
+    A repeat call while the session is still valid is a no-op; after it expires
+    the browser flow runs again and issues a fresh token.
+    """
     config = load_config()
     if config.token is not None and not is_token_expired(config.token):
         return {"authenticated": True, "message": "Already logged in."}
