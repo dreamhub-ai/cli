@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ import httpx
 import jwt
 import pytest
 import respx
+from fastmcp.tools import Tool
 
 import dreamhubcli.mcp_server as mcp_server_mod
 from dreamhubcli.config import DreamhubConfig, load_config, save_config
@@ -753,14 +755,10 @@ class TestToolAnnotations:
     """Risk hints are what let a client skip prompting on reads; an unannotated
     tool prompts identically to a delete, so the prompt stops carrying signal."""
 
-    def _tools(self) -> dict[str, Any]:
+    def _tools(self) -> dict[str, Tool]:
         from dreamhubcli.mcp_server import mcp
 
-        return {
-            key.removeprefix("tool:").removesuffix("@"): component
-            for key, component in mcp._local_provider._components.items()
-            if key.startswith("tool:")
-        }
+        return {tool.name: tool for tool in asyncio.run(mcp.local_provider.list_tools())}
 
     def test_every_registered_tool_advertises_risk_hints(self) -> None:
         unannotated = sorted(name for name, tool in self._tools().items() if tool.annotations is None)
@@ -786,3 +784,4 @@ class TestToolAnnotations:
 
         assert "not_in" in description
         assert "between_or_null" in description
+        assert "not_null" in description
