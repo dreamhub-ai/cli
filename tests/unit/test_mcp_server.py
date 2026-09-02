@@ -147,6 +147,19 @@ class TestEntityTypeValidation:
         assert _resolve_entity_resource("person") == "people"
         assert _resolve_entity_resource("COMPANIES") == "companies"
 
+    def test_resolve_contract_entity_type(self) -> None:
+        """Contracts are the newest entity here — both the singular and plural spellings resolve."""
+        from dreamhubcli.mcp_server import _resolve_entity_resource
+
+        assert _resolve_entity_resource("contract") == "contracts"
+        assert _resolve_entity_resource("contracts") == "contracts"
+
+    def test_entity_types_match_the_cli_surface(self) -> None:
+        """`dh activities` keeps its own copy of the map; an entity added to one belongs in both."""
+        from dreamhubcli.commands.activities import ENTITY_TYPES as cli_entity_types
+
+        assert mcp_server_mod.ENTITY_TYPES == cli_entity_types
+
     def test_resolve_invalid_entity_type(self) -> None:
         from dreamhubcli.mcp_server import _resolve_entity_resource
 

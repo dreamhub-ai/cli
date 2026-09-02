@@ -28,29 +28,33 @@ def _create_company(runner: CliRunner) -> dict:
 def test_contract(runner: CliRunner) -> dict:
     """Create a staging contract with E2E_TEST_ prefix; delete it and its company after."""
     company = _create_company(runner)
-    name = f"E2E_TEST_{uuid4().hex[:8]}"
-    payload = {"name": name, "companyId": company["id"]}
-    result = runner.invoke(app, ["contracts", "create", json.dumps(payload), "--json"])
-    assert result.exit_code == 0, f"contracts create failed: {result.output}"
-    contract = json.loads(result.output)
-    yield contract
-    runner.invoke(app, ["contracts", "delete", contract["id"], "--force"])
-    runner.invoke(app, ["companies", "delete", company["id"], "--force"])
+    try:
+        name = f"E2E_TEST_{uuid4().hex[:8]}"
+        payload = {"name": name, "companyId": company["id"]}
+        result = runner.invoke(app, ["contracts", "create", json.dumps(payload), "--json"])
+        assert result.exit_code == 0, f"contracts create failed: {result.output}"
+        contract = json.loads(result.output)
+        try:
+            yield contract
+        finally:
+            runner.invoke(app, ["contracts", "delete", contract["id"], "--force"])
+    finally:
+        runner.invoke(app, ["companies", "delete", company["id"], "--force"])
 
 
 def test_contracts_list(runner: CliRunner) -> None:
     """List contracts returns paginated results successfully."""
     result = runner.invoke(app, ["contracts", "list"])
-    assert result.exit_code in (0, 1), f"contracts list failed: {result.output}"
+    # An empty tenant still exits 0 — the command handles 404 as a clean empty list, so a
+    # non-zero exit here is an auth or transport failure, never "no contracts".
+    assert result.exit_code == 0, f"contracts list failed: {result.output}"
 
 
 def test_contracts_list_json(runner: CliRunner) -> None:
     """List contracts --json returns valid JSON with the contracts collection key."""
     result = runner.invoke(app, ["contracts", "list", "--json"])
-    assert result.exit_code in (0, 1), f"contracts list --json failed: {result.output}"
-    if result.exit_code == 0:
-        data = json.loads(result.output)
-        assert "contracts" in data
+    assert result.exit_code == 0, f"contracts list --json failed: {result.output}"
+    assert "contracts" in json.loads(result.output)
 
 
 def test_contracts_get(runner: CliRunner, test_contract: dict) -> None:
@@ -78,12 +82,12 @@ def test_contracts_filter(runner: CliRunner, test_contract: dict) -> None:
 def test_contracts_delete(runner: CliRunner) -> None:
     """Create and immediately delete a throwaway contract."""
     company = _create_company(runner)
-    name = f"E2E_TEST_{uuid4().hex[:8]}"
-    payload = {"name": name, "companyId": company["id"]}
-    create_result = runner.invoke(app, ["contracts", "create", json.dumps(payload), "--json"])
-    assert create_result.exit_code == 0, f"contracts create failed: {create_result.output}"
-    contract = json.loads(create_result.output)
     try:
+        name = f"E2E_TEST_{uuid4().hex[:8]}"
+        payload = {"name": name, "companyId": company["id"]}
+        create_result = runner.invoke(app, ["contracts", "create", json.dumps(payload), "--json"])
+        assert create_result.exit_code == 0, f"contracts create failed: {create_result.output}"
+        contract = json.loads(create_result.output)
         delete_result = runner.invoke(app, ["contracts", "delete", contract["id"], "--force"])
         assert delete_result.exit_code == 0, f"contracts delete failed: {delete_result.output}"
     finally:
