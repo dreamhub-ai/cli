@@ -334,7 +334,7 @@ CRUD_ENTITIES = {
                 5: "One-Time Services Only",
                 6: "Draft",
             },
-            "renewalType": {1: "Auto Renewal", 2: "Manual Renewal", 3: "Hybrid"},
+            "renewalType": {1: "Auto Renewal", 2: "Manual Renewal", 3: "Mixed"},
         },
     },
 }
@@ -666,7 +666,7 @@ def list_activities(
     tags: list[str] | None = None,
     size: int = 20,
 ) -> dict:
-    """List activities for an entity (deal, company, lead, person, task)."""
+    """List activities for an entity (deal, company, lead, person, task, contract)."""
     resource = _resolve_entity_resource(entity_type)
     client = _client()
     payload: dict[str, Any] = {"size": size}

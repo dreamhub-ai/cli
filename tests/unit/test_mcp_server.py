@@ -14,6 +14,7 @@ import respx
 from fastmcp.tools import Tool
 
 import dreamhubcli.mcp_server as mcp_server_mod
+from dreamhubcli.commands.contracts import CONTRACT_LABEL_MAPS
 from dreamhubcli.config import DreamhubConfig, load_config, save_config
 
 API_URL = "https://crm.dreamhub.ai/api/v1"
@@ -779,6 +780,16 @@ class TestToolAnnotations:
     def test_every_crud_entity_has_a_singular_name(self) -> None:
         """_register_crud_tools indexes SINGULAR_NAMES directly — a gap is an import-time KeyError."""
         assert set(mcp_server_mod.CRUD_ENTITIES) <= set(mcp_server_mod.SINGULAR_NAMES)
+
+    def test_contract_labels_match_the_cli_surface(self) -> None:
+        """Both surfaces render the same records; a drifted label reads as a different value."""
+        assert mcp_server_mod.CRUD_ENTITIES["contracts"]["labels"] == CONTRACT_LABEL_MAPS
+
+    def test_only_the_browser_and_installer_tools_are_open_world(self) -> None:
+        """Every other tool talks to the Dreamhub API alone — an open-world hint there overprompts."""
+        open_world = {name for name, tool in self._tools().items() if tool.annotations.openWorldHint}
+
+        assert open_world == {"login", "update_cli"}
 
     def test_filter_docstring_lists_the_operators_the_api_implements(self) -> None:
         description = self._tools()["filter_contracts"].description
