@@ -583,8 +583,8 @@ class TestToolRegistration:
 
         components = mcp._local_provider._components
         tool_keys = [k for k in components if k.startswith("tool:")]
-        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 50
-        assert len(tool_keys) == 50
+        # 7 entities * 6 CRUD ops = 42 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 56
+        assert len(tool_keys) == 56
 
 
 class TestUpdateCli:
@@ -747,3 +747,42 @@ class TestClientCliPatFallback:
         mcp_server_mod._refresh_token_or_promote_pat()
 
         assert len(calls) == 1, "create_cli_pat must not be retried after a failed attempt"
+
+
+class TestToolAnnotations:
+    """Risk hints are what let a client skip prompting on reads; an unannotated
+    tool prompts identically to a delete, so the prompt stops carrying signal."""
+
+    def _tools(self) -> dict[str, Any]:
+        from dreamhubcli.mcp_server import mcp
+
+        return {
+            key.removeprefix("tool:").removesuffix("@"): component
+            for key, component in mcp._local_provider._components.items()
+            if key.startswith("tool:")
+        }
+
+    def test_every_registered_tool_advertises_risk_hints(self) -> None:
+        unannotated = sorted(name for name, tool in self._tools().items() if tool.annotations is None)
+
+        assert unannotated == []
+
+    def test_reads_are_read_only_and_deletes_are_destructive(self) -> None:
+        tools = self._tools()
+
+        assert tools["list_contracts"].annotations.readOnlyHint is True
+        assert tools["get_contract"].annotations.readOnlyHint is True
+        assert tools["create_contract"].annotations.readOnlyHint is False
+        assert tools["create_contract"].annotations.idempotentHint is False
+        assert tools["update_contract"].annotations.idempotentHint is True
+        assert tools["delete_contract"].annotations.destructiveHint is True
+
+    def test_every_crud_entity_has_a_singular_name(self) -> None:
+        """_register_crud_tools indexes SINGULAR_NAMES directly — a gap is an import-time KeyError."""
+        assert set(mcp_server_mod.CRUD_ENTITIES) <= set(mcp_server_mod.SINGULAR_NAMES)
+
+    def test_filter_docstring_lists_every_supported_operator(self) -> None:
+        description = self._tools()["filter_contracts"].description
+
+        assert "not_in" in description
+        assert "between_or_null" in description
