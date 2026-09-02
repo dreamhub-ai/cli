@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import httpx
@@ -279,7 +280,10 @@ class TestCompaniesCommands:
         assert result.exit_code == 0
         assert "Examples:" in result.output
         assert "not_in" in result.output
-        assert " nin " not in result.output
+        # Match the token on word boundaries, not " nin " — a help line ending "nin,"
+        # or "`nin`" would slip past a space-delimited check and re-document the operator
+        # the API raises on. `not_in` is unaffected: `_` is a word character.
+        assert re.search(r"\bnin\b", result.output) is None
 
 
 class TestDealsCommands:
