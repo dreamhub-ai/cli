@@ -13,7 +13,7 @@ from typing import Any
 
 import httpx
 from fastmcp import FastMCP
-from mcp.types import Icon
+from mcp.types import Icon, ToolAnnotations
 
 from dreamhubcli import __version__
 from dreamhubcli.auth import create_cli_pat, is_token_expired, login_with_token, refresh_access_token
@@ -93,6 +93,20 @@ mcp = FastMCP(
     icons=[Icon(src=_ICON_DATA_URI, mimeType="image/svg+xml")],
 )
 
+# Risk hints let a client decide which calls need a human in the loop. Without
+# them every tool looks alike, so a read prompts exactly like a delete and the
+# prompting stops carrying information.
+#
+# READ_ONLY describes the Dreamhub side: the call reads and never writes. Every
+# one of these routes through _client(), which refreshes the session and can mint
+# a CLI PAT and rewrite ~/.dreamhub/config.toml. That is a local credential
+# refresh on data the caller already holds, not a change to anything the tool
+# reads, so the hint stands -- but it is a side effect and is stated here.
+READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+CREATES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+UPDATES = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+DELETES = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -102,7 +116,7 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def check_auth_status() -> dict:
     """Check if the user is logged in to Dreamhub.
 
@@ -126,9 +140,20 @@ def check_auth_status() -> dict:
     return {"authenticated": True, "message": None}
 
 
-@mcp.tool()
+# Open-world: hands control to the browser and an external identity provider.
+# Idempotent in the sense the hint is read for -- a repeat call on a live session
+# returns "Already logged in" without touching the identity provider. Once the
+# session is gone the repeat re-runs the flow and mints a new token, which is the
+# point of calling it again rather than a surprise.
+@mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+)
 def login() -> dict:
-    """Open the browser for Dreamhub login. Returns once login completes or times out."""
+    """Open the browser for Dreamhub login. Returns once login completes or times out.
+
+    A repeat call while the session is still valid is a no-op; after it expires
+    the browser flow runs again and issues a fresh token.
+    """
     config = load_config()
     if config.token is not None and not is_token_expired(config.token):
         return {"authenticated": True, "message": "Already logged in."}
@@ -187,7 +212,13 @@ def login() -> dict:
         }
 
 
-@mcp.tool()
+# Open-world: pulls the release from the package index. Idempotent — a second
+# call on an already-current install is a no-op. Destructive because it replaces
+# the installed package in place rather than adding to it, so a client must ask
+# before running new third-party code over the one the user has.
+@mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True)
+)
 def update_cli() -> dict:
     """Check for and apply any available Dreamhub CLI updates.
 
@@ -287,6 +318,23 @@ CRUD_ENTITIES = {
         "labels": {
             "isCompleted": {1: "Completed", 0: "Open"},
             "isHighPriority": {1: "High", 0: "Normal"},
+        },
+    },
+    # Mirrors ContractStatusEnum and RenewalTypeEnum in accountsession's contracts
+    # model — both are fixed enums, not per-account configuration.
+    "contracts": {
+        "path": "contracts",
+        "key": "contracts",
+        "labels": {
+            "status": {
+                1: "Active",
+                2: "Upcoming",
+                3: "Expired",
+                4: "No Services Configured",
+                5: "One-Time Services Only",
+                6: "Draft",
+            },
+            "renewalType": {1: "Auto Renewal", 2: "Manual Renewal", 3: "Mixed"},
         },
     },
 }
@@ -417,6 +465,7 @@ SINGULAR_NAMES: dict[str, str] = {
     "people": "person",
     "users": "user",
     "tasks": "task",
+    "contracts": "contract",
 }
 
 
@@ -513,35 +562,36 @@ def _register_crud_tools() -> None:
         list_fn = _build_list_fn(path, key, cfg)
         list_fn.__name__ = f"list_{entity}"
         list_fn.__doc__ = f"List {entity} (paginated)."
-        mcp.tool()(list_fn)
+        mcp.tool(annotations=READ_ONLY)(list_fn)
 
         get_fn = _build_get_fn(path, cfg)
         get_fn.__name__ = f"get_{singular}"
         get_fn.__doc__ = f"Get a single {singular} by ID."
-        mcp.tool()(get_fn)
+        mcp.tool(annotations=READ_ONLY)(get_fn)
 
         create_fn = _build_create_fn(path, cfg)
         create_fn.__name__ = f"create_{singular}"
         create_fn.__doc__ = f"Create a new {singular}. Pass entity fields as data."
-        mcp.tool()(create_fn)
+        mcp.tool(annotations=CREATES)(create_fn)
 
         update_fn = _build_update_fn(path, cfg)
         update_fn.__name__ = f"update_{singular}"
         update_fn.__doc__ = f"Update an existing {singular}. Pass changed fields as data."
-        mcp.tool()(update_fn)
+        mcp.tool(annotations=UPDATES)(update_fn)
 
         delete_fn = _build_delete_fn(path)
         delete_fn.__name__ = f"delete_{singular}"
         delete_fn.__doc__ = f"Delete a {singular} by ID."
-        mcp.tool()(delete_fn)
+        mcp.tool(annotations=DELETES)(delete_fn)
 
         filter_fn = _build_filter_fn(path, key, cfg)
         filter_fn.__name__ = f"filter_{entity}"
         filter_fn.__doc__ = (
             f"Filter {entity} by field conditions. "
-            "Operators: eq, ne, gt, gte, lt, lte, in, nin, contains, contains_nocase, between, not_null."
+            "Operators: eq, ne, gt, gte, lt, lte, in, not_in, contains, contains_nocase, "
+            "between, between_or_null, not_null."
         )
-        mcp.tool()(filter_fn)
+        mcp.tool(annotations=READ_ONLY)(filter_fn)
 
 
 _register_crud_tools()
@@ -552,7 +602,7 @@ _register_crud_tools()
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_deal_stages(include_additional_info: bool = False) -> list[dict] | dict:
     """List deal pipeline stages for this account. Stages are tenant-configured."""
     client = _client()
@@ -589,6 +639,8 @@ ENTITY_TYPES = {
     "people": "people",
     "task": "tasks",
     "tasks": "tasks",
+    "contract": "contracts",
+    "contracts": "contracts",
 }
 
 
@@ -602,7 +654,7 @@ def _resolve_entity_resource(entity_type: str) -> str:
     return resource
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_activities(
     entity_type: str,
     entity_id: str,
@@ -614,7 +666,7 @@ def list_activities(
     tags: list[str] | None = None,
     size: int = 20,
 ) -> dict:
-    """List activities for an entity (deal, company, lead, person, task)."""
+    """List activities for an entity (deal, company, lead, person, task, contract)."""
     resource = _resolve_entity_resource(entity_type)
     client = _client()
     payload: dict[str, Any] = {"size": size}
@@ -646,7 +698,7 @@ def _enrich_activity(activity: dict) -> dict:
     return activity
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_activity(entity_type: str, entity_id: str, activity_id: str, size: int = 500) -> dict:
     """Get a single activity by ID from an entity's activity list."""
     resource = _resolve_entity_resource(entity_type)
@@ -661,7 +713,7 @@ def get_activity(entity_type: str, entity_id: str, activity_id: str, size: int =
     return {"error": True, "detail": f"Activity '{activity_id}' not found on {entity_id}."}
 
 
-@mcp.tool()
+@mcp.tool(annotations=CREATES)
 def create_activity(
     entity_type: str,
     entity_id: str,
@@ -693,7 +745,7 @@ def create_activity(
     return _ok(response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_activity_types() -> list[dict]:
     """List available activity types."""
     return [{"id": k, "name": v} for k, v in ACTIVITY_TYPES.items()]
@@ -704,7 +756,7 @@ def list_activity_types() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def search(
     query: str,
     entity_type: str | None = None,
@@ -731,7 +783,7 @@ def search(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_history(
     entity_type: str | None = None,
     entity_id: str | None = None,
@@ -765,7 +817,7 @@ REPORT_TYPES = [
 ]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_report(report_type: str) -> dict:
     """Fetch a sales report.
 
@@ -784,7 +836,7 @@ def get_report(report_type: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def list_settings() -> dict | list:
     """List all account settings."""
     client = _client()
@@ -792,7 +844,7 @@ def list_settings() -> dict | list:
     return _ok(response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_setting(key: str) -> dict:
     """Get a specific account setting by key."""
     client = _client()
@@ -800,7 +852,7 @@ def get_setting(key: str) -> dict:
     return _ok(response)
 
 
-@mcp.tool()
+@mcp.tool(annotations=UPDATES)
 def set_setting(key: str, value: str) -> dict:
     """Update an account setting."""
     client = _client()

@@ -16,6 +16,8 @@ app = typer.Typer(name="activities", help="Manage activities (calls, emails, mee
 ENTITY_TYPES = {
     "company": "companies",
     "companies": "companies",
+    "contract": "contracts",
+    "contracts": "contracts",
     "deal": "deals",
     "deals": "deals",
     "lead": "leads",

@@ -41,7 +41,6 @@ _FILTER_OPERATORS = {
     "lt",
     "lte",
     "in",
-    "nin",
     "not_in",
     "contains",
     "contains_nocase",
@@ -88,7 +87,7 @@ def _parse_inline_filters(args: list[str]) -> list[dict[str, Any]] | None:
         elif len(group) < 3:
             print_error(f"Missing value: {field} {operator} <value>")
             return None
-        elif operator in ("in", "nin", "not_in"):
+        elif operator in ("in", "not_in"):
             values = [_coerce_value(v.strip()) for v in " ".join(group[2:]).split(",")]
             conditions.append({field: {operator: values}})
         elif operator in ("between", "between_or_null"):
@@ -336,7 +335,7 @@ def build_crud_app(
             f"  dh {name} filter status eq 1 and name contains_nocase Acme",
             f"  dh {name} filter --from filter.json",
             "",
-            "Operators: eq ne gt gte lt lte in nin not_in contains contains_nocase between between_or_null not_null",
+            "Operators: eq ne gt gte lt lte in not_in contains contains_nocase between between_or_null not_null",
         ]
     )
 

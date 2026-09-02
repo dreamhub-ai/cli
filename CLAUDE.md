@@ -29,7 +29,9 @@ poetry run dh --help         # verify CLI works
 
 ## Command Groups
 
-14 groups: auth, activities, companies, deals, leads, people, users, settings, history, tasks, search, reporting, enrichment (dev), access (dev)
+14 sub-apps: auth, activities, companies, contracts, deals, leads, people, users, settings, tasks, reporting, mcp, enrichment (dev), access (dev)
+
+Plus three top-level commands registered directly on the root app rather than as groups: `history`, `search`, `update`.
 
 CRUD entities use the shared factory — add new ones by calling `build_crud_app()` in a new module.
 

@@ -22,6 +22,7 @@ from dreamhubcli.commands import (
     activities,
     auth,
     companies,
+    contracts,
     deals,
     enrichment,
     history,
@@ -83,6 +84,7 @@ def main_callback(
 app.add_typer(activities.app)
 app.add_typer(auth.app)
 app.add_typer(companies.app)
+app.add_typer(contracts.app)
 app.add_typer(deals.app)
 app.add_typer(leads.app)
 app.add_typer(people.app)

@@ -48,6 +48,17 @@ class TestListActivities:
         assert "Note" in result.output
 
     @respx.mock
+    def test_list_activities_for_a_contract(self, temp_config_dir: Path) -> None:
+        """The singular `contract` alias must route to the plural `contracts` resource path."""
+        _auth(temp_config_dir)
+        route = respx.post(f"{API_URL}/contracts/CON-AB-1/activities/fetch").mock(
+            return_value=httpx.Response(200, json={"activities": [], "total": 0})
+        )
+        result = runner.invoke(app, ["activities", "list", "contract", "CON-AB-1"])
+        assert result.exit_code == 0
+        assert route.called
+
+    @respx.mock
     def test_list_activities_json(self, temp_config_dir: Path) -> None:
         _auth(temp_config_dir)
         respx.post(f"{API_URL}/deals/D-AB-1/activities/fetch").mock(

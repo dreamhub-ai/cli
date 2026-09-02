@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any
@@ -10,8 +11,10 @@ import httpx
 import jwt
 import pytest
 import respx
+from fastmcp.tools import Tool
 
 import dreamhubcli.mcp_server as mcp_server_mod
+from dreamhubcli.commands.contracts import CONTRACT_LABEL_MAPS
 from dreamhubcli.config import DreamhubConfig, load_config, save_config
 
 API_URL = "https://crm.dreamhub.ai/api/v1"
@@ -27,13 +30,18 @@ def _reset_stage_cache() -> None:
     mod._stage_cache = None
 
 
-def _get_tool_fn(name: str) -> Any:
-    """Get a registered MCP tool function by name."""
+def _registered_tools() -> dict[str, Tool]:
+    """Every registered tool by name, read through the provider's public API."""
     from dreamhubcli.mcp_server import mcp
 
-    component = mcp._local_provider._components.get(f"tool:{name}@")
-    assert component is not None, f"Tool '{name}' not registered"
-    return component.fn
+    return {tool.name: tool for tool in asyncio.run(mcp.local_provider.list_tools())}
+
+
+def _get_tool_fn(name: str) -> Any:
+    """Get a registered MCP tool function by name."""
+    tool = _registered_tools().get(name)
+    assert tool is not None, f"Tool '{name}' not registered"
+    return tool.fn
 
 
 class TestHelpers:
@@ -138,6 +146,19 @@ class TestEntityTypeValidation:
         assert _resolve_entity_resource("deals") == "deals"
         assert _resolve_entity_resource("person") == "people"
         assert _resolve_entity_resource("COMPANIES") == "companies"
+
+    def test_resolve_contract_entity_type(self) -> None:
+        """Contracts are the newest entity here — both the singular and plural spellings resolve."""
+        from dreamhubcli.mcp_server import _resolve_entity_resource
+
+        assert _resolve_entity_resource("contract") == "contracts"
+        assert _resolve_entity_resource("contracts") == "contracts"
+
+    def test_entity_types_match_the_cli_surface(self) -> None:
+        """`dh activities` keeps its own copy of the map; an entity added to one belongs in both."""
+        from dreamhubcli.commands.activities import ENTITY_TYPES as cli_entity_types
+
+        assert mcp_server_mod.ENTITY_TYPES == cli_entity_types
 
     def test_resolve_invalid_entity_type(self) -> None:
         from dreamhubcli.mcp_server import _resolve_entity_resource
@@ -547,21 +568,19 @@ class TestDealStagesTool:
 
 class TestToolRegistration:
     def test_crud_tools_registered(self) -> None:
-        from dreamhubcli.mcp_server import SINGULAR_NAMES, mcp
+        from dreamhubcli.mcp_server import SINGULAR_NAMES
 
-        components = mcp._local_provider._components
+        tools = _registered_tools()
         for entity, singular in SINGULAR_NAMES.items():
-            assert f"tool:list_{entity}@" in components, f"list_{entity} not registered"
-            assert f"tool:get_{singular}@" in components, f"get_{singular} not registered"
-            assert f"tool:create_{singular}@" in components, f"create_{singular} not registered"
-            assert f"tool:update_{singular}@" in components, f"update_{singular} not registered"
-            assert f"tool:delete_{singular}@" in components, f"delete_{singular} not registered"
-            assert f"tool:filter_{entity}@" in components, f"filter_{entity} not registered"
+            assert f"list_{entity}" in tools, f"list_{entity} not registered"
+            assert f"get_{singular}" in tools, f"get_{singular} not registered"
+            assert f"create_{singular}" in tools, f"create_{singular} not registered"
+            assert f"update_{singular}" in tools, f"update_{singular} not registered"
+            assert f"delete_{singular}" in tools, f"delete_{singular} not registered"
+            assert f"filter_{entity}" in tools, f"filter_{entity} not registered"
 
     def test_custom_tools_registered(self) -> None:
-        from dreamhubcli.mcp_server import mcp
-
-        components = mcp._local_provider._components
+        tools = _registered_tools()
         expected = [
             "list_activities",
             "get_activity",
@@ -576,15 +595,11 @@ class TestToolRegistration:
             "set_setting",
         ]
         for name in expected:
-            assert f"tool:{name}@" in components, f"{name} not registered"
+            assert name in tools, f"{name} not registered"
 
     def test_total_tool_count(self) -> None:
-        from dreamhubcli.mcp_server import mcp
-
-        components = mcp._local_provider._components
-        tool_keys = [k for k in components if k.startswith("tool:")]
-        # 6 entities * 6 CRUD ops = 36 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 50
-        assert len(tool_keys) == 50
+        # 7 entities * 6 CRUD ops = 42 + 11 custom tools + 3 auth tools (check_auth_status, login, update_cli) = 56
+        assert len(_registered_tools()) == 56
 
 
 class TestUpdateCli:
@@ -747,3 +762,53 @@ class TestClientCliPatFallback:
         mcp_server_mod._refresh_token_or_promote_pat()
 
         assert len(calls) == 1, "create_cli_pat must not be retried after a failed attempt"
+
+
+class TestToolAnnotations:
+    """Risk hints are what let a client skip prompting on reads; an unannotated
+    tool prompts identically to a delete, so the prompt stops carrying signal."""
+
+    def _tools(self) -> dict[str, Tool]:
+        return _registered_tools()
+
+    def test_every_registered_tool_advertises_risk_hints(self) -> None:
+        unannotated = sorted(name for name, tool in self._tools().items() if tool.annotations is None)
+
+        assert unannotated == []
+
+    def test_crud_annotations_match_their_verb(self) -> None:
+        tools = self._tools()
+
+        assert tools["list_contracts"].annotations.readOnlyHint is True
+        assert tools["get_contract"].annotations.readOnlyHint is True
+        assert tools["create_contract"].annotations.readOnlyHint is False
+        assert tools["create_contract"].annotations.idempotentHint is False
+        assert tools["update_contract"].annotations.idempotentHint is True
+        assert tools["delete_contract"].annotations.destructiveHint is True
+
+    def test_update_cli_is_destructive(self) -> None:
+        """It replaces the installed package in place, so a client must ask before running it."""
+        assert self._tools()["update_cli"].annotations.destructiveHint is True
+
+    def test_every_crud_entity_has_a_singular_name(self) -> None:
+        """_register_crud_tools indexes SINGULAR_NAMES directly — a gap is an import-time KeyError."""
+        assert set(mcp_server_mod.CRUD_ENTITIES) <= set(mcp_server_mod.SINGULAR_NAMES)
+
+    def test_contract_labels_match_the_cli_surface(self) -> None:
+        """Both surfaces render the same records; a drifted label reads as a different value."""
+        assert mcp_server_mod.CRUD_ENTITIES["contracts"]["labels"] == CONTRACT_LABEL_MAPS
+
+    def test_only_the_browser_and_installer_tools_are_open_world(self) -> None:
+        """Every other tool talks to the Dreamhub API alone — an open-world hint there overprompts."""
+        open_world = {name for name, tool in self._tools().items() if tool.annotations.openWorldHint}
+
+        assert open_world == {"login", "update_cli"}
+
+    def test_filter_docstring_lists_the_operators_the_api_implements(self) -> None:
+        description = self._tools()["filter_contracts"].description
+
+        assert "not_in" in description
+        assert "between_or_null" in description
+        assert "not_null" in description
+        # The API has no `nin` branch — it raises on the operator it is offered here.
+        assert "nin," not in description
