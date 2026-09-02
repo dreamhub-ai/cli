@@ -199,9 +199,11 @@ def login() -> dict:
 
 
 # Open-world: pulls the release from the package index. Idempotent — a second
-# call on an already-current install is a no-op.
+# call on an already-current install is a no-op. Destructive because it replaces
+# the installed package in place rather than adding to it, so a client must ask
+# before running new third-party code over the one the user has.
 @mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True)
 )
 def update_cli() -> dict:
     """Check for and apply any available Dreamhub CLI updates.
@@ -572,7 +574,7 @@ def _register_crud_tools() -> None:
         filter_fn.__name__ = f"filter_{entity}"
         filter_fn.__doc__ = (
             f"Filter {entity} by field conditions. "
-            "Operators: eq, ne, gt, gte, lt, lte, in, nin, not_in, contains, contains_nocase, "
+            "Operators: eq, ne, gt, gte, lt, lte, in, not_in, contains, contains_nocase, "
             "between, between_or_null, not_null."
         )
         mcp.tool(annotations=READ_ONLY)(filter_fn)

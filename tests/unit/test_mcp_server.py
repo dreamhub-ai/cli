@@ -765,7 +765,7 @@ class TestToolAnnotations:
 
         assert unannotated == []
 
-    def test_reads_are_read_only_and_deletes_are_destructive(self) -> None:
+    def test_crud_annotations_match_their_verb(self) -> None:
         tools = self._tools()
 
         assert tools["list_contracts"].annotations.readOnlyHint is True
@@ -775,13 +775,19 @@ class TestToolAnnotations:
         assert tools["update_contract"].annotations.idempotentHint is True
         assert tools["delete_contract"].annotations.destructiveHint is True
 
+    def test_update_cli_is_destructive(self) -> None:
+        """It replaces the installed package in place, so a client must ask before running it."""
+        assert self._tools()["update_cli"].annotations.destructiveHint is True
+
     def test_every_crud_entity_has_a_singular_name(self) -> None:
         """_register_crud_tools indexes SINGULAR_NAMES directly — a gap is an import-time KeyError."""
         assert set(mcp_server_mod.CRUD_ENTITIES) <= set(mcp_server_mod.SINGULAR_NAMES)
 
-    def test_filter_docstring_lists_every_supported_operator(self) -> None:
+    def test_filter_docstring_lists_the_operators_the_api_implements(self) -> None:
         description = self._tools()["filter_contracts"].description
 
         assert "not_in" in description
         assert "between_or_null" in description
         assert "not_null" in description
+        # The API has no `nin` branch — it raises on the operator it is offered here.
+        assert "nin," not in description
