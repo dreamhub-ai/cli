@@ -29,7 +29,7 @@ poetry run dh --help         # verify CLI works
 
 ## Command Groups
 
-14 groups: auth, activities, companies, deals, leads, people, users, settings, history, tasks, search, reporting, enrichment (dev), access (dev)
+15 groups: auth, activities, companies, contracts, deals, leads, people, users, settings, history, tasks, search, reporting, enrichment (dev), access (dev)
 
 CRUD entities use the shared factory — add new ones by calling `build_crud_app()` in a new module.
 

@@ -293,6 +293,30 @@ class TestDealsCommands:
         assert "Big Deal" in result.output
 
 
+class TestContractsCommands:
+    @respx.mock
+    def test_list_renders_status_labels(self, temp_config_dir: Path) -> None:
+        """`status` is an int on the wire — the label map is what makes the column readable."""
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        respx.post(f"{API_URL}/contracts/filter").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "contracts": [{"id": "con-ab-1", "name": "Acme MSA", "status": 3}],
+                    "total": 1,
+                    "page": 1,
+                    "pageSize": 20,
+                },
+            )
+        )
+
+        result = runner.invoke(app, ["contracts", "list"])
+
+        assert result.exit_code == 0
+        assert "Acme MSA" in result.output
+        assert "Expired" in result.output
+
+
 class TestLeadsCommands:
     @respx.mock
     def test_list(self, temp_config_dir: Path) -> None:
