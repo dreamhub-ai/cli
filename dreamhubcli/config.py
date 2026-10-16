@@ -37,6 +37,8 @@ class DreamhubConfig(BaseModel):
     cli_pat: str | None = Field(default=None)
     cli_pat_id: str | None = Field(default=None)
     cli_pat_created_at: str | None = Field(default=None)
+    # Per-install PAT name; the server rotates keys by name, so a shared name would let installs revoke each other
+    cli_pat_name: str | None = Field(default=None)
 
     # Self-update version check
     last_version_check: str | None = Field(default=None)

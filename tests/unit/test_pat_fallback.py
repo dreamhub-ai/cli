@@ -194,6 +194,107 @@ class TestRotateCliPat:
         # no-op, should not raise
 
 
+class TestCliPatNamePerInstall:
+    """The server rotates keys by name, so each install needs its own name."""
+
+    @staticmethod
+    def _sent_name(route: respx.Route) -> str:
+        return json.loads(route.calls[-1].request.content)["name"]
+
+    @respx.mock
+    def test_create_and_rotate_reuse_the_install_name(self, temp_config_dir: Path) -> None:
+        jwt = _make_jwt({"exp": int(time.time()) + 3600})
+        config = DreamhubConfig(token=jwt, tenant_id="t-1")
+        save_config(config)
+        route = respx.post(PAT_ENDPOINT).mock(return_value=httpx.Response(201, json={"id": "p1", "token": "pat_a"}))
+        respx.delete(f"{PAT_ENDPOINT}p1").mock(return_value=httpx.Response(204))
+
+        create_cli_pat(config)
+        created_name = self._sent_name(route)
+        config.cli_pat_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 13 * 86400))
+        route.mock(return_value=httpx.Response(201, json={"id": "p2", "token": "pat_b"}))
+        rotate_cli_pat_if_needed(config)
+
+        assert created_name.startswith("cli-session-")
+        assert self._sent_name(route) == created_name
+        assert load_config().cli_pat_name == created_name
+
+    @respx.mock
+    def test_two_installs_send_different_names(self, temp_config_dir: Path) -> None:
+        jwt = _make_jwt({"exp": int(time.time()) + 3600})
+        route = respx.post(PAT_ENDPOINT).mock(return_value=httpx.Response(201, json={"id": "p1", "token": "pat_a"}))
+
+        create_cli_pat(DreamhubConfig(token=jwt, tenant_id="t-1"))
+        first = self._sent_name(route)
+        create_cli_pat(DreamhubConfig(token=jwt, tenant_id="t-1"))
+
+        assert self._sent_name(route) != first
+
+    @respx.mock
+    def test_failed_create_keeps_the_name_for_retry(self, temp_config_dir: Path) -> None:
+        jwt = _make_jwt({"exp": int(time.time()) + 3600})
+        save_config(DreamhubConfig(token=jwt, tenant_id="t-1"))
+        route = respx.post(PAT_ENDPOINT).mock(return_value=httpx.Response(500))
+
+        create_cli_pat(load_config())
+        first = self._sent_name(route)
+        create_cli_pat(load_config())
+
+        assert self._sent_name(route) == first
+        assert load_config().cli_pat_name == first
+
+    @respx.mock
+    def test_rotate_sends_the_name_loaded_from_config(self, temp_config_dir: Path) -> None:
+        save_config(
+            DreamhubConfig(
+                token="pat_old",
+                cli_pat="pat_old",
+                cli_pat_id="old-id",
+                cli_pat_name="cli-session-0a1b2c3d",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 13 * 86400)),
+            )
+        )
+        route = respx.post(PAT_ENDPOINT).mock(
+            return_value=httpx.Response(201, json={"id": "new-id", "token": "pat_new"})
+        )
+        respx.delete(f"{PAT_ENDPOINT}old-id").mock(return_value=httpx.Response(204))
+
+        rotate_cli_pat_if_needed(load_config())
+
+        assert self._sent_name(route) == "cli-session-0a1b2c3d"
+
+    @respx.mock
+    def test_legacy_key_rotates_to_install_name_and_is_deleted(self, temp_config_dir: Path) -> None:
+        save_config(
+            DreamhubConfig(
+                token="pat_legacy",
+                cli_pat="pat_legacy",
+                cli_pat_id="legacy-id",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 13 * 86400)),
+            )
+        )
+        route = respx.post(PAT_ENDPOINT).mock(
+            return_value=httpx.Response(201, json={"id": "new-id", "token": "pat_new"})
+        )
+        old_delete = respx.delete(f"{PAT_ENDPOINT}legacy-id").mock(return_value=httpx.Response(204))
+
+        rotate_cli_pat_if_needed(load_config())
+
+        sent = self._sent_name(route)
+        assert sent.startswith("cli-session-")
+        assert sent != "cli-session"
+        assert old_delete.called
+        persisted = load_config()
+        assert persisted.cli_pat_name == sent
+        assert persisted.cli_pat_id == "new-id"
+
+    def test_login_and_logout_keep_the_install_name(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="old_jwt", cli_pat_name="cli-session-0a1b2c3d"))
+
+        assert login_with_token("new_jwt").cli_pat_name == "cli-session-0a1b2c3d"
+        assert logout().cli_pat_name == "cli-session-0a1b2c3d"
+
+
 class TestLoginClearsStalePatFields:
     def test_login_with_token_clears_old_pat(self, temp_config_dir: Path) -> None:
         """Re-login must not leave a stale PAT from a previous session."""
