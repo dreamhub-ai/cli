@@ -68,7 +68,7 @@ class TestAccessToken:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["token", "--page", "0"])
         assert result.exit_code == 2
-        assert "--page" in click.unstyle(result.output)
+        assert "Invalid value for '--page'" in click.unstyle(result.output)
 
 
 class TestAccessCreateToken:
@@ -112,6 +112,7 @@ class TestAccessCreateToken:
         for name in ("", "x" * 257):
             result = _invoke(["create-token", "--name", name])
             assert result.exit_code == 2
+            assert "Invalid value for '--name'" in click.unstyle(result.output)
             assert "1-256 characters" in click.unstyle(result.output)
 
     @respx.mock
