@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import click
 import httpx
 import respx
 from click.testing import Result
@@ -61,13 +62,13 @@ class TestAccessToken:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["token", "--page-size", "101"])
         assert result.exit_code == 2
-        assert "--page-size" in result.output
+        assert "--page-size" in click.unstyle(result.output)
 
     def test_rejects_page_0(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["token", "--page", "0"])
         assert result.exit_code == 2
-        assert "--page" in result.output
+        assert "--page" in click.unstyle(result.output)
 
 
 class TestAccessCreateToken:
@@ -97,21 +98,21 @@ class TestAccessCreateToken:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["create-token"])
         assert result.exit_code == 2
-        assert "--name" in result.output
+        assert "--name" in click.unstyle(result.output)
 
     def test_rejects_expiry_outside_1_to_365(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         for days in ("0", "366"):
             result = _invoke(["create-token", "--name", "x", "--expires-days", days])
             assert result.exit_code == 2
-            assert "--expires-days" in result.output
+            assert "--expires-days" in click.unstyle(result.output)
 
     def test_rejects_name_outside_1_to_256_characters(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         for name in ("", "x" * 257):
             result = _invoke(["create-token", "--name", name])
             assert result.exit_code == 2
-            assert "1-256 characters" in result.output
+            assert "1-256 characters" in click.unstyle(result.output)
 
     @respx.mock
     def test_accepts_256_character_name(self, temp_config_dir: Path) -> None:
