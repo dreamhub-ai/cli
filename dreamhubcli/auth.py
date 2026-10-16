@@ -10,6 +10,7 @@ import base64
 import calendar
 import json
 import logging
+import secrets
 import time
 
 import httpx
@@ -170,6 +171,13 @@ def _api_base_url() -> str:
     return DEFAULT_API_URL.rstrip("/")
 
 
+def _cli_pat_name(config: DreamhubConfig) -> str:
+    """Return this install's PAT name, generating it on first use."""
+    if not config.cli_pat_name:
+        config.cli_pat_name = f"cli-session-{secrets.token_hex(4)}"
+    return config.cli_pat_name
+
+
 def create_cli_pat(config: DreamhubConfig) -> None:
     """Create a 14-day CLI-managed PAT after browser login.
 
@@ -192,7 +200,7 @@ def create_cli_pat(config: DreamhubConfig) -> None:
     try:
         response = httpx.post(
             url,
-            json={"name": "cli-session", "expiresInDays": _PAT_EXPIRY_DAYS},
+            json={"name": _cli_pat_name(config), "expiresInDays": _PAT_EXPIRY_DAYS},
             headers=headers,
             timeout=15.0,
         )
@@ -262,7 +270,7 @@ def rotate_cli_pat_if_needed(config: DreamhubConfig) -> None:
     try:
         response = httpx.post(
             url,
-            json={"name": "cli-session", "expiresInDays": _PAT_EXPIRY_DAYS},
+            json={"name": _cli_pat_name(config), "expiresInDays": _PAT_EXPIRY_DAYS},
             headers=headers,
             timeout=15.0,
         )
