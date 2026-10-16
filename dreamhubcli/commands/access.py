@@ -10,6 +10,14 @@ from dreamhubcli.output import console, print_detail, print_json, print_success,
 
 app = typer.Typer(name="access", help="Manage personal access tokens (dev/QA only).", no_args_is_help=True)
 
+_MAX_NAME_LENGTH = 256
+
+
+def _validate_name(value: str) -> str:
+    if not 1 <= len(value) <= _MAX_NAME_LENGTH:
+        raise typer.BadParameter(f"must be 1-{_MAX_NAME_LENGTH} characters.")
+    return value
+
 
 @app.command(
     name="token",
@@ -52,7 +60,11 @@ def get_token(
 def create_token(
     ctx: typer.Context,
     name: str = typer.Option(
-        ..., "--name", "-n", help="Token name. Creating a token replaces your other tokens with the same name."
+        ...,
+        "--name",
+        "-n",
+        callback=_validate_name,
+        help="Token name (1-256 characters). Creating a token replaces your other tokens with the same name.",
     ),
     expires_days: int = typer.Option(365, "--expires-days", min=1, max=365, help="Days until the token expires."),
     use_json: bool = typer.Option(False, "--json", help="Output raw JSON."),

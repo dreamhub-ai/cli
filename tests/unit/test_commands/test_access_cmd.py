@@ -61,6 +61,13 @@ class TestAccessToken:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["token", "--page-size", "101"])
         assert result.exit_code == 2
+        assert "--page-size" in result.output
+
+    def test_rejects_page_0(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        result = _invoke(["token", "--page", "0"])
+        assert result.exit_code == 2
+        assert "--page" in result.output
 
 
 class TestAccessCreateToken:
@@ -73,6 +80,8 @@ class TestAccessCreateToken:
         result = _invoke(["create-token", "--name", "nightly-export", "--expires-days", "90"])
         assert result.exit_code == 0, result.output
         assert json.loads(route.calls.last.request.content) == {"name": "nightly-export", "expiresInDays": 90}
+        assert "Personal access token created." in result.output
+        assert "pat_new" in result.output
 
     @respx.mock
     def test_expiry_defaults_to_365(self, temp_config_dir: Path) -> None:
@@ -88,8 +97,38 @@ class TestAccessCreateToken:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
         result = _invoke(["create-token"])
         assert result.exit_code == 2
+        assert "--name" in result.output
 
     def test_rejects_expiry_outside_1_to_365(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
-        assert _invoke(["create-token", "--name", "x", "--expires-days", "0"]).exit_code == 2
-        assert _invoke(["create-token", "--name", "x", "--expires-days", "366"]).exit_code == 2
+        for days in ("0", "366"):
+            result = _invoke(["create-token", "--name", "x", "--expires-days", days])
+            assert result.exit_code == 2
+            assert "--expires-days" in result.output
+
+    def test_rejects_name_outside_1_to_256_characters(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        for name in ("", "x" * 257):
+            result = _invoke(["create-token", "--name", name])
+            assert result.exit_code == 2
+            assert "1-256 characters" in result.output
+
+    @respx.mock
+    def test_accepts_256_character_name(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        name = "x" * 256
+        route = respx.post(TOKENS_URL).mock(return_value=httpx.Response(201, json=_token(name=name, token="pat_new")))
+        result = _invoke(["create-token", "--name", name])
+        assert result.exit_code == 0, result.output
+        assert json.loads(route.calls.last.request.content)["name"] == name
+
+    @respx.mock
+    def test_server_422_exits_1(self, temp_config_dir: Path) -> None:
+        save_config(DreamhubConfig(token="pat_test", tenant_id="t-1"))
+        respx.post(TOKENS_URL).mock(
+            return_value=httpx.Response(422, json={"detail": "expiresInDays must be at most 365"})
+        )
+        result = _invoke(["create-token", "--name", "nightly-export"])
+        assert result.exit_code == 1
+        assert "Validation failed: expiresInDays must be at most 365" in result.output
+        assert "Personal access token created." not in result.output
