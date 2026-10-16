@@ -230,6 +230,51 @@ class TestCliPatNamePerInstall:
 
         assert self._sent_name(route) != first
 
+    @respx.mock
+    def test_rotate_sends_the_name_loaded_from_config(self, temp_config_dir: Path) -> None:
+        save_config(
+            DreamhubConfig(
+                token="pat_old",
+                cli_pat="pat_old",
+                cli_pat_id="old-id",
+                cli_pat_name="cli-session-0a1b2c3d",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 13 * 86400)),
+            )
+        )
+        route = respx.post(PAT_ENDPOINT).mock(
+            return_value=httpx.Response(201, json={"id": "new-id", "token": "pat_new"})
+        )
+        respx.delete(f"{PAT_ENDPOINT}old-id").mock(return_value=httpx.Response(204))
+
+        rotate_cli_pat_if_needed(load_config())
+
+        assert self._sent_name(route) == "cli-session-0a1b2c3d"
+
+    @respx.mock
+    def test_legacy_key_rotates_to_install_name_and_is_deleted(self, temp_config_dir: Path) -> None:
+        save_config(
+            DreamhubConfig(
+                token="pat_legacy",
+                cli_pat="pat_legacy",
+                cli_pat_id="legacy-id",
+                cli_pat_created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 13 * 86400)),
+            )
+        )
+        route = respx.post(PAT_ENDPOINT).mock(
+            return_value=httpx.Response(201, json={"id": "new-id", "token": "pat_new"})
+        )
+        old_delete = respx.delete(f"{PAT_ENDPOINT}legacy-id").mock(return_value=httpx.Response(204))
+
+        rotate_cli_pat_if_needed(load_config())
+
+        sent = self._sent_name(route)
+        assert sent.startswith("cli-session-")
+        assert sent != "cli-session"
+        assert old_delete.called
+        persisted = load_config()
+        assert persisted.cli_pat_name == sent
+        assert persisted.cli_pat_id == "new-id"
+
     def test_login_and_logout_keep_the_install_name(self, temp_config_dir: Path) -> None:
         save_config(DreamhubConfig(token="old_jwt", cli_pat_name="cli-session-0a1b2c3d"))
 
