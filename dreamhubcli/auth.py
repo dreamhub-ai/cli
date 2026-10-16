@@ -175,6 +175,7 @@ def _cli_pat_name(config: DreamhubConfig) -> str:
     """Return this install's PAT name, generating it on first use."""
     if not config.cli_pat_name:
         config.cli_pat_name = f"cli-session-{secrets.token_hex(4)}"
+        save_config(config)
     return config.cli_pat_name
 
 

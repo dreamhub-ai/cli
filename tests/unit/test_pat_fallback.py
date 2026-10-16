@@ -231,6 +231,19 @@ class TestCliPatNamePerInstall:
         assert self._sent_name(route) != first
 
     @respx.mock
+    def test_failed_create_keeps_the_name_for_retry(self, temp_config_dir: Path) -> None:
+        jwt = _make_jwt({"exp": int(time.time()) + 3600})
+        save_config(DreamhubConfig(token=jwt, tenant_id="t-1"))
+        route = respx.post(PAT_ENDPOINT).mock(return_value=httpx.Response(500))
+
+        create_cli_pat(load_config())
+        first = self._sent_name(route)
+        create_cli_pat(load_config())
+
+        assert self._sent_name(route) == first
+        assert load_config().cli_pat_name == first
+
+    @respx.mock
     def test_rotate_sends_the_name_loaded_from_config(self, temp_config_dir: Path) -> None:
         save_config(
             DreamhubConfig(
